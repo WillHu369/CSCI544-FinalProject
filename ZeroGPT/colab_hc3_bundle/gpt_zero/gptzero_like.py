@@ -19,7 +19,7 @@ from sklearn.preprocessing import StandardScaler
 
 from gpt_zero.batching import BatchSource, SampleBatchLoader
 from gpt_zero.config import DEFAULT_GPTZERO_LM, DEFAULT_RANDOM_STATE
-from gpt_zero.io_utils import dump_json, ensure_dir, read_table
+from gpt_zero.io_utils import dump_json, ensure_dir, read_table, reset_dir
 from gpt_zero.schemas import GPTZERO_DIAGNOSTIC_COLUMNS, ID_TO_LABEL, LABEL_TO_ID, PREDICTION_COLUMNS
 from gpt_zero.text_utils import split_sentences
 
@@ -531,7 +531,7 @@ def train_gptzero_like_detector(
     feature_config: FeatureExtractionConfig | None = None,
     batch_size: int = 32,
 ) -> dict:
-    destination = ensure_dir(model_dir)
+    destination = reset_dir(model_dir, preserve_names=(".gitkeep",))
     detector = GPTZeroLikeDetector(scorer_config=scorer_config, feature_config=feature_config)
     scorer = CausalLMPerplexityScorer(scorer_config)
     cache_dir = ensure_dir(Path(destination) / "feature_cache")

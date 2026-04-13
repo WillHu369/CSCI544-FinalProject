@@ -16,7 +16,7 @@ from sklearn.svm import LinearSVC
 
 from gpt_zero.batching import BatchSource, SampleBatchLoader
 from gpt_zero.config import DEFAULT_RANDOM_STATE
-from gpt_zero.io_utils import dump_json, ensure_dir, load_json
+from gpt_zero.io_utils import dump_json, ensure_dir, load_json, reset_dir
 from gpt_zero.schemas import CLASSICAL_DIAGNOSTIC_COLUMNS, ID_TO_LABEL, LABEL_TO_ID, PREDICTION_COLUMNS
 from gpt_zero.tfidf import TfidfFeatureConfig, TfidfFeatureExtractor
 
@@ -464,7 +464,7 @@ def train_classical_baselines(
     training_config: BaselineTrainingConfig | None = None,
     val_source: BatchSource | None = None,
 ) -> dict:
-    destination = ensure_dir(model_dir)
+    destination = reset_dir(model_dir)
     suite = ClassicalBaselineSuite(feature_config=feature_config, training_config=training_config)
     suite.fit(train_source, val_source=val_source)
     suite.save(destination)

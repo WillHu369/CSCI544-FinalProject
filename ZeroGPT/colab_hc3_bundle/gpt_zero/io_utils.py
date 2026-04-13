@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import shutil
 from datetime import datetime, timezone
 from pathlib import Path
 from uuid import uuid4
@@ -11,6 +12,25 @@ import pandas as pd
 def ensure_dir(path: Path | str) -> Path:
     directory = Path(path)
     directory.mkdir(parents=True, exist_ok=True)
+    return directory
+
+
+def reset_dir(path: Path | str, preserve_names: tuple[str, ...] = ()) -> Path:
+    directory = ensure_dir(path)
+    preserved = set(preserve_names)
+    preserved_existing = {child.name for child in directory.iterdir() if child.name in preserved}
+    for child in directory.iterdir():
+        if child.name in preserved:
+            continue
+        if child.is_dir():
+            shutil.rmtree(child)
+        else:
+            child.unlink()
+
+    for name in preserved_existing:
+        placeholder = directory / name
+        if not placeholder.exists():
+            placeholder.touch()
     return directory
 
 

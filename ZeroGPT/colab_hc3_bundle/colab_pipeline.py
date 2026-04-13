@@ -14,7 +14,7 @@ from gpt_zero.gptzero_like import (
     train_gptzero_like_detector,
 )
 from gpt_zero.hc3 import PrepareHC3Config, prepare_hc3_dataset
-from gpt_zero.io_utils import dump_json, ensure_dir, read_table, timestamp_run_id, write_table
+from gpt_zero.io_utils import dump_json, ensure_dir, read_table, reset_dir, timestamp_run_id, write_table
 from gpt_zero.metrics import evaluate_predictions
 from gpt_zero.tfidf import TfidfFeatureConfig
 
@@ -215,7 +215,7 @@ def score_models(
     score_splits: tuple[str, ...] = ("test",),
 ) -> dict:
     data_dir = Path(data_dir)
-    run_dir = ensure_dir(run_dir)
+    run_dir = reset_dir(run_dir, preserve_names=(".gitkeep",))
     predictions_dir = ensure_dir(run_dir / "predictions")
     requested_splits = _normalize_score_splits(score_splits)
     run_id = run_id or timestamp_run_id("colab_run")

@@ -43,13 +43,14 @@ REPO_DIR = "/content/drive/MyDrive/colab_hc3_bundle"
 Baseline models:
 
 - use the existing SVM and XGBoost models
-- or retrain them in Colab
+- or retrain them in Colab to overwrite `artifacts/models/baselines/` and refresh `artifacts/runs/hc3_baselines_run/`
 
 GPTZero-like model:
 
 - train it in Colab on HC3
 - score the test split
 - generate evaluation metrics and comparison plots
+- overwrite `artifacts/models/gptzero_like/` and refresh `artifacts/runs/hc3_gptzero_run/` when you rerun training
 - prefer the local `hf_models/gpt2/` copy when present
 - fall back to downloading `gpt2` only if the local folder is missing
 
@@ -64,9 +65,9 @@ Parquet is preferred for large runs, but CSV is supported.
 
 ## Outputs
 
-Baseline reruns go under:
+Baseline outputs go under:
 
-- `artifacts/runs/hc3_baselines_recheck/`
+- `artifacts/runs/hc3_baselines_run/`
 
 GPTZero-like runs go under:
 
@@ -82,8 +83,8 @@ Each run writes:
 
 - HC3 is already prepared in `artifacts/data/hc3/`.
 - The local GPTZero scorer model is not included on git; run the notebook's optional download cell once to recreate `hf_models/gpt2/` when needed.
-- The baseline models are already available in `artifacts/models/baselines/`.
-- The GPTZero-like model is intended to be trained in Colab.
+- The baseline models are already available in `artifacts/models/baselines/`; retraining in the notebook overwrites that same directory instead of creating a parallel baseline model path.
+- The GPTZero-like model is intended to be trained in Colab, and rerunning that section overwrites the saved detector artifacts in `artifacts/models/gptzero_like/` and refreshes `artifacts/runs/hc3_gptzero_run/`.
 - The recommended workflow is to populate `hf_models/gpt2/` locally before uploading the folder to Drive, so Colab does not need to download the scorer model at runtime.
 - If you choose to push `hf_models/gpt2/pytorch_model.bin` to GitHub, use Git LFS.
 - If you previously ran the install cell before these pinned versions, restart the Colab runtime and run the install cell again.

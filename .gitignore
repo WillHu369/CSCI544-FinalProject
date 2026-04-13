@@ -220,9 +220,6 @@ ZeroGPT/colab_hc3_bundle/env/
 # Local experiment outputs
 ZeroGPT/colab_hc3_bundle/artifacts/models/gptzero_like/*
 !ZeroGPT/colab_hc3_bundle/artifacts/models/gptzero_like/.gitkeep
-ZeroGPT/colab_hc3_bundle/artifacts/models/baselines_retrained/
-ZeroGPT/colab_hc3_bundle/artifacts/runs/hc3_baselines_recheck/
-ZeroGPT/colab_hc3_bundle/artifacts/runs/hc3_baselines_retrained/
 ZeroGPT/colab_hc3_bundle/artifacts/runs/hc3_gptzero_full_run/
 ZeroGPT/colab_hc3_bundle/artifacts/runs/hc3_gptzero_run/*
 !ZeroGPT/colab_hc3_bundle/artifacts/runs/hc3_gptzero_run/.gitkeep
