@@ -229,3 +229,14 @@ ZeroGPT/colab_hc3_bundle/hf_models/
 
 # Notebook noise
 ZeroGPT/colab_hc3_bundle/*.nbconvert.ipynb
+
+# HC3 recursive paraphrase local outputs
+HC3-Recursive-Paraphrase/.env
+HC3-Recursive-Paraphrase/.venv/
+HC3-Recursive-Paraphrase/.test_scratch/
+HC3-Recursive-Paraphrase/artifacts/experiments/*
+!HC3-Recursive-Paraphrase/artifacts/experiments/.gitkeep
+HC3-Recursive-Paraphrase/artifacts/checkpoints/*
+!HC3-Recursive-Paraphrase/artifacts/checkpoints/.gitkeep
+HC3-Recursive-Paraphrase/artifacts/api_calls/*
+!HC3-Recursive-Paraphrase/artifacts/api_calls/.gitkeep
