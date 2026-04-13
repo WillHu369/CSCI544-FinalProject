@@ -78,24 +78,6 @@ Each run writes:
 - `metrics/`
 - `run_config.json`
 
-## Recommended `.gitignore` Additions
-
-If you upload this folder to its own GitHub repo, these are the main entries worth ignoring:
-
-```gitignore
-__pycache__/
-.ipynb_checkpoints/
-*.pyc
-
-# Optional local rerun outputs
-artifacts/models/gptzero_like/*
-!artifacts/models/gptzero_like/.gitkeep
-artifacts/runs/hc3_baselines_recheck/
-artifacts/runs/hc3_baselines_retrained/
-artifacts/runs/hc3_gptzero_run/*
-!artifacts/runs/hc3_gptzero_run/.gitkeep
-```
-
 ## Notes
 
 - HC3 is already prepared in `artifacts/data/hc3/`.
