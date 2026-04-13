@@ -1,0 +1,12 @@
+{
+  "config": {
+    "char_max_features": 15000,
+    "char_ngram_max": 5,
+    "char_ngram_min": 3,
+    "min_df": 2,
+    "word_max_features": 20000,
+    "word_ngram_max": 2,
+    "word_ngram_min": 1
+  },
+  "feature_type": "tfidf_word_char"
+}

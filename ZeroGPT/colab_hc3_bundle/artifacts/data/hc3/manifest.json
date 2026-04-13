@@ -1,0 +1,70 @@
+{
+  "config": {
+    "deduplicate_texts": true,
+    "group_by_prompt": true,
+    "max_samples_per_label": null,
+    "random_state": 42,
+    "test_size": 0.2,
+    "val_size": 0.1
+  },
+  "counts_by_label": {
+    "ai": 26244,
+    "human": 53086
+  },
+  "counts_by_split": {
+    "test": 15894,
+    "train": 55546,
+    "val": 7890
+  },
+  "dataset": "hc3",
+  "deduplication": {
+    "conflicting_text_labels": 0,
+    "duplicates_after": 0,
+    "duplicates_before": 6101,
+    "rows_after": 79330,
+    "rows_before": 85431,
+    "rows_removed": 6101
+  },
+  "domains": [
+    "finance",
+    "medicine",
+    "open_qa",
+    "reddit_eli5",
+    "wiki_csai"
+  ],
+  "duplicate_summary": {
+    "conflicting_text_labels": 0,
+    "duplicate_prompt_text_label": 0,
+    "duplicate_text": 0,
+    "duplicate_text_label": 0
+  },
+  "num_samples": 79330,
+  "schema": [
+    "sample_id",
+    "dataset",
+    "domain",
+    "prompt",
+    "text",
+    "label",
+    "source_model",
+    "split",
+    "variant_type",
+    "parent_sample_id",
+    "attack_name",
+    "attack_metadata"
+  ],
+  "source": "artifacts\\data\\hc3\\full.parquet",
+  "split_overlap": {
+    "prompt": {
+      "train_test": 0,
+      "train_val": 0,
+      "val_test": 0
+    },
+    "text": {
+      "train_test": 0,
+      "train_val": 0,
+      "val_test": 0
+    }
+  },
+  "split_strategy": "prompt_text_disjoint"
+}

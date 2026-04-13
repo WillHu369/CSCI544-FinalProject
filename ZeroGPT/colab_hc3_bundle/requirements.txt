@@ -1,0 +1,14 @@
+# Colab already includes a CUDA-enabled PyTorch build.
+# Do not install torch from this file inside Colab unless you explicitly want to replace it.
+numpy==2.0.2
+pandas==2.2.2
+scikit-learn==1.8.0
+scipy>=1.13
+xgboost>=2.1
+datasets>=2.19
+transformers>=4.41
+huggingface-hub>=0.23
+joblib>=1.4
+pyarrow>=17.0
+tqdm>=4.66
+matplotlib>=3.8

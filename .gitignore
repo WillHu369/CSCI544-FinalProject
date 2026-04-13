@@ -205,3 +205,30 @@ cython_debug/
 marimo/_static/
 marimo/_lsp/
 __marimo__/
+
+# ZeroGPT Colab bundle
+ZeroGPT/colab_hc3_bundle/__pycache__/
+ZeroGPT/colab_hc3_bundle/.ipynb_checkpoints/
+ZeroGPT/colab_hc3_bundle/*.pyc
+ZeroGPT/colab_hc3_bundle/*.pyo
+ZeroGPT/colab_hc3_bundle/*.pyd
+
+ZeroGPT/colab_hc3_bundle/.venv/
+ZeroGPT/colab_hc3_bundle/venv/
+ZeroGPT/colab_hc3_bundle/env/
+
+# Local experiment outputs
+ZeroGPT/colab_hc3_bundle/artifacts/models/gptzero_like/*
+!ZeroGPT/colab_hc3_bundle/artifacts/models/gptzero_like/.gitkeep
+ZeroGPT/colab_hc3_bundle/artifacts/models/baselines_retrained/
+ZeroGPT/colab_hc3_bundle/artifacts/runs/hc3_baselines_recheck/
+ZeroGPT/colab_hc3_bundle/artifacts/runs/hc3_baselines_retrained/
+ZeroGPT/colab_hc3_bundle/artifacts/runs/hc3_gptzero_full_run/
+ZeroGPT/colab_hc3_bundle/artifacts/runs/hc3_gptzero_run/*
+!ZeroGPT/colab_hc3_bundle/artifacts/runs/hc3_gptzero_run/.gitkeep
+
+# Optional local Hugging Face cache if you do not want to version model weights
+ZeroGPT/colab_hc3_bundle/hf_models/
+
+# Notebook noise
+ZeroGPT/colab_hc3_bundle/*.nbconvert.ipynb

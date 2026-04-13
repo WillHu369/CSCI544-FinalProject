@@ -1,0 +1,31 @@
+{
+  "detectors": [
+    "svm_tfidf",
+    "xgboost_tfidf"
+  ],
+  "feature_config": {
+    "char_max_features": 15000,
+    "char_ngram_max": 5,
+    "char_ngram_min": 3,
+    "min_df": 2,
+    "word_max_features": 20000,
+    "word_ngram_max": 2,
+    "word_ngram_min": 1
+  },
+  "training_config": {
+    "batch_size": 2048,
+    "random_state": 42,
+    "svm_c": 1.0,
+    "svm_max_iter": 10000,
+    "xgb_batch_size": 1024,
+    "xgb_colsample_bytree": 0.8,
+    "xgb_device": "cuda",
+    "xgb_early_stopping_rounds": 20,
+    "xgb_estimators": 120,
+    "xgb_eval_log_interval": 10,
+    "xgb_learning_rate": 0.1,
+    "xgb_max_bin": 256,
+    "xgb_max_depth": 4,
+    "xgb_subsample": 0.8
+  }
+}

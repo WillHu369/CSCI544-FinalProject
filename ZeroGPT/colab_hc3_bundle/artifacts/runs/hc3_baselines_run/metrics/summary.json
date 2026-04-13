@@ -1,0 +1,10 @@
+{
+  "num_detectors": 2,
+  "num_predictions": 158660,
+  "splits": [
+    "test",
+    "train",
+    "val"
+  ],
+  "target_fpr": 0.01
+}
