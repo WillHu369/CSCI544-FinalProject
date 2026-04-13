@@ -42,6 +42,7 @@ ZEROGPT_BUNDLE_DIR = PROJECT_ROOT / "ZeroGPT" / "colab_hc3_bundle"
 DEFAULT_SOURCE_FILE = PROJECT_ROOT / "HC3-Dataset-Samples" / "hc3_unified_1000_seed42.csv"
 DEFAULT_OUTPUT_ROOT = SCRIPT_DIR / "artifacts" / "experiments"
 DEFAULT_ENV_FILE = SCRIPT_DIR / ".env"
+DEFAULT_PROMPT_PREFIX_FILE = SCRIPT_DIR / "prompt_prefix.txt"
 
 DEFAULT_MODEL = "gpt-5.4-mini"
 DEFAULT_DEPTHS = (1, 2, 3)
@@ -57,6 +58,18 @@ PRICING_SOURCE_URL = "https://openai.com/api/pricing/"
 
 PARAPHRASE_ATTACK_NAME = "openai_recursive_paraphrase"
 PARAPHRASE_VARIANT_PREFIX = "recursive_paraphrase_depth_"
+DEFAULT_PROMPT_PREFIX = """
+Rewrite the AI-generated answer below as a close paraphrase that reads more like natural human writing.
+
+Requirements:
+- Preserve meaning, factual claims, sentiment, numbers, named entities, and domain terminology.
+- Change wording and sentence structure materially.
+- Make the writing feel less formulaic and more human in rhythm, phrasing, and sentence variation.
+- Avoid generic assistant-style wording, repetitive transitions, polished boilerplate, and obvious AI-sounding phrasing.
+- Prefer concrete, natural phrasing over stiff or overly balanced wording.
+- Return only the rewritten answer text.
+- Do not add explanations, bullet points, labels, or quotation marks.
+""".strip()
 
 
 @dataclass(frozen=True)
@@ -229,6 +242,15 @@ def load_env_file(path: Path | str, *, override: bool = False) -> None:
                 value = value[1:-1]
             if override or key not in os.environ:
                 os.environ[key] = value
+
+
+def load_prompt_prefix(path: Path | str = DEFAULT_PROMPT_PREFIX_FILE) -> str:
+    prompt_path = Path(path)
+    if not prompt_path.exists():
+        return DEFAULT_PROMPT_PREFIX
+
+    text = prompt_path.read_text(encoding="utf-8").strip()
+    return text or DEFAULT_PROMPT_PREFIX
 
 
 def reset_dir(path: Path | str, preserve_names: tuple[str, ...] = ()) -> Path:
@@ -596,16 +618,10 @@ def estimate_tokens(text: str) -> int:
     return max(1, int(math.ceil(len(stripped) / 4.0)))
 
 
-def build_paraphrase_prompt(*, question: str, answer: str, domain: str) -> str:
+def build_paraphrase_prompt(*, question: str, answer: str, domain: str, prompt_prefix: str) -> str:
     return "\n".join(
         [
-            "Rewrite the AI-generated answer below as a close paraphrase.",
-            "",
-            "Requirements:",
-            "- Preserve meaning, factual claims, sentiment, numbers, named entities, and domain terminology.",
-            "- Change wording and sentence structure materially.",
-            "- Return only the rewritten answer text.",
-            "- Do not add explanations, bullet points, labels, or quotation marks.",
+            prompt_prefix.strip(),
             "",
             f"Domain: {domain or 'unknown'}",
             "Question:",
@@ -617,12 +633,17 @@ def build_paraphrase_prompt(*, question: str, answer: str, domain: str) -> str:
     ).strip()
 
 
-def estimate_usage_for_frame(frame: pd.DataFrame) -> UsageTotals:
+def estimate_usage_for_frame(frame: pd.DataFrame, *, prompt_prefix: str) -> UsageTotals:
     ai_rows = frame.loc[frame["label"].astype(str) == "ai"]
     usage = UsageTotals()
     usage.requests = int(len(ai_rows))
     for row in ai_rows.itertuples(index=False):
-        prompt = build_paraphrase_prompt(question=str(row.prompt), answer=str(row.text), domain=str(row.domain))
+        prompt = build_paraphrase_prompt(
+            question=str(row.prompt),
+            answer=str(row.text),
+            domain=str(row.domain),
+            prompt_prefix=prompt_prefix,
+        )
         usage.input_tokens += estimate_tokens(prompt)
         usage.output_tokens += estimate_tokens(str(row.text))
     usage.total_tokens = usage.input_tokens + usage.output_tokens
@@ -637,8 +658,9 @@ def build_estimate_report(
     pricing_overrides: dict[str, PricingEntry],
     sample_selection: dict[str, Any],
     source_summary: dict[str, Any],
+    prompt_prefix: str,
 ) -> dict[str, Any]:
-    base_usage = estimate_usage_for_frame(frame)
+    base_usage = estimate_usage_for_frame(frame, prompt_prefix=prompt_prefix)
     requested_max_depth = max(depths)
     models_payload: dict[str, Any] = {}
 
@@ -749,6 +771,7 @@ class RecursiveParaphraser:
         self,
         *,
         model: str,
+        prompt_prefix: str,
         request_delay_seconds: float,
         max_retries: int,
         temperature: float,
@@ -756,6 +779,7 @@ class RecursiveParaphraser:
         client: Any | None = None,
     ) -> None:
         self.model = model
+        self.prompt_prefix = prompt_prefix
         self.request_delay_seconds = request_delay_seconds
         self.max_retries = max_retries
         self.temperature = temperature
@@ -829,6 +853,7 @@ class RecursiveParaphraser:
                     question=str(row.prompt),
                     answer=current_text,
                     domain=str(row.domain),
+                    prompt_prefix=self.prompt_prefix,
                 )
                 response = self._create_response(prompt, current_text)
                 output_text = extract_response_text(response)
@@ -1050,6 +1075,7 @@ def run_command(args: argparse.Namespace) -> dict[str, Any]:
     generator_models = parse_generator_models(args.generator_model)
     depths = parse_depths(args.depths)
     pricing_overrides = parse_model_pricing(args.model_pricing)
+    prompt_prefix = load_prompt_prefix()
 
     source_rows = load_source_rows(args.source_file)
     sampled_source_rows = sample_source_rows(
@@ -1079,6 +1105,7 @@ def run_command(args: argparse.Namespace) -> dict[str, Any]:
         pricing_overrides=pricing_overrides,
         sample_selection=sample_selection,
         source_summary=source_summary,
+        prompt_prefix=prompt_prefix,
     )
     validate_budget_guard(estimate_report, args.max_estimated_cost_usd)
 
@@ -1114,6 +1141,7 @@ def run_command(args: argparse.Namespace) -> dict[str, Any]:
 
         paraphraser = RecursiveParaphraser(
             model=model,
+            prompt_prefix=prompt_prefix,
             request_delay_seconds=args.request_delay_seconds,
             max_retries=args.max_retries,
             temperature=args.temperature,
@@ -1147,6 +1175,7 @@ def run_command(args: argparse.Namespace) -> dict[str, Any]:
                     "recursion_depth": depth,
                     "attack_name": PARAPHRASE_ATTACK_NAME,
                     "control_dataset_dir": str(control_dataset_dir),
+                    "prompt_prefix_file": DEFAULT_PROMPT_PREFIX_FILE.name,
                     "paraphrase_usage": usage_summary["depths"][str(depth)],
                     "checkpoint_path": str(checkpoint_path),
                     "api_call_log_path": str(api_call_log_path),
@@ -1170,6 +1199,7 @@ def run_command(args: argparse.Namespace) -> dict[str, Any]:
         "sample_selection": sample_selection,
         "estimate_report_path": str(output_dir / "estimate.json"),
         "control_dataset_dir": str(control_dataset_dir),
+        "prompt_prefix_file": DEFAULT_PROMPT_PREFIX_FILE.name,
         "variants": variant_manifests,
         "pricing_verified_at": PRICING_VERIFIED_AT,
         "pricing_source_url": PRICING_SOURCE_URL,
@@ -1187,6 +1217,7 @@ def estimate_command(args: argparse.Namespace) -> dict[str, Any]:
     generator_models = parse_generator_models(args.generator_model)
     depths = parse_depths(args.depths)
     pricing_overrides = parse_model_pricing(args.model_pricing)
+    prompt_prefix = load_prompt_prefix()
 
     source_rows = load_source_rows(args.source_file)
     sampled_source_rows = sample_source_rows(
@@ -1215,6 +1246,7 @@ def estimate_command(args: argparse.Namespace) -> dict[str, Any]:
         pricing_overrides=pricing_overrides,
         sample_selection=sample_selection,
         source_summary=source_summary,
+        prompt_prefix=prompt_prefix,
     )
     report["control_summary"] = control_summary
 

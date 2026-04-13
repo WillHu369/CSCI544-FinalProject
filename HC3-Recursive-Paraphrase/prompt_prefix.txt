@@ -1,0 +1,10 @@
+Rewrite the AI-generated answer below as a close paraphrase that reads more like natural human writing.
+
+Requirements:
+- Preserve meaning, factual claims, sentiment, numbers, named entities, and domain terminology.
+- Change wording and sentence structure materially.
+- Make the writing feel less formulaic and more human in rhythm, phrasing, and sentence variation.
+- Avoid generic assistant-style wording, repetitive transitions, polished boilerplate, and obvious AI-sounding phrasing.
+- Prefer concrete, natural phrasing over stiff or overly balanced wording.
+- Return only the rewritten answer text.
+- Do not add explanations, bullet points, labels, or quotation marks.

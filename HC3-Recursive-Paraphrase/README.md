@@ -4,31 +4,7 @@ This folder builds recursive paraphrase dataset variants from the HC3 sample CSV
 
 ## Setup
 
-From this folder, create a virtual environment with a compatible Python version such as Python 3.12:
-
-```bash
-python -m venv .venv
-```
-
-If your default `python` is not the version you want, use a specific interpreter instead:
-
-```bash
-python3.12 -m venv .venv
-```
-
-Activate the environment:
-
-```bash
-source .venv/Scripts/activate
-```
-
-Or in PowerShell:
-
-```powershell
-.\.venv\Scripts\Activate.ps1
-```
-
-Install dependencies:
+Install the Python dependencies for this folder:
 
 ```bash
 pip install -r requirements.txt
@@ -41,6 +17,8 @@ OPENAI_API_KEY=your_api_key_here
 ```
 
 The script auto-loads that file when it starts.
+
+Edit `prompt_prefix.txt` to tune the paraphrasing behavior. The script uses that file as the instruction prefix, then appends the row's domain, question, and answer text automatically.
 
 ## Commands
 
@@ -74,6 +52,7 @@ Each run writes into `artifacts/experiments/<source>_<subset>_seed<seed>/`:
 
 - `sampled_source_rows.csv`
 - `estimate.json`
+- `prompt_prefix.txt` controls the editable rephrasing instructions used for the run
 - `datasets/control/{train,val,test,full}.csv`
 - `datasets/<model>/depth_<n>/{train,val,test,full}.csv`
 - `checkpoints/<model>_depthmax<n>.jsonl`
