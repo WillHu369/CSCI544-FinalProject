@@ -16,6 +16,26 @@ parser.add_argument(
 )
 args = parser.parse_args()
 
+
+def infer_metadata(results_dict):
+    return {
+        "detection_method": results_dict.get("detection_method", "unknown"),
+        "model_used": results_dict.get("model_used", "unknown"),
+        "dataset_used": results_dict.get("dataset_used", "unknown"),
+        "additional_models_used": results_dict.get("additional_models_used", []),
+        "notes": results_dict.get("notes", "")
+    }
+
+
+def select_threshold_at_target_fpr(fpr, tpr, thresholds, target_fpr=0.01):
+    valid = np.where(fpr <= target_fpr)[0]
+    if len(valid) == 0:
+        # If no ROC point is at or below target FPR, pick the closest point.
+        idx = int(np.argmin(np.abs(fpr - target_fpr)))
+    else:
+        idx = int(valid[np.argmax(tpr[valid])])
+    return idx
+
 def resolve_results_path(path_str):
     p = Path(path_str)
     if p.is_absolute() and p.exists():
@@ -53,18 +73,9 @@ y_score = np.concatenate([real, samples])
 roc_auc = roc_auc_score(y_true, y_score)
 fpr, tpr, thresholds = roc_curve(y_true, y_score)
 
-# TPR@1%FPR (piecewise ROC points)
-mask = fpr <= 0.01
-tpr_at_1pct = float(np.max(tpr[mask])) if np.any(mask) else 0.0
-
-# Pick a threshold. Threshold at 5% FPR:
-target_fpr = 0.1
-valid = np.where(fpr <= target_fpr)[0]
-
-if len(valid) == 0:
-    idx = 0
-else:
-    idx = valid[np.argmax(tpr[valid])]
+# Pick threshold at 1% FPR operating region.
+target_fpr = 0.01
+idx = select_threshold_at_target_fpr(fpr, tpr, thresholds, target_fpr=target_fpr)
 
 thr = thresholds[idx]
 print(f"Selected threshold for target_fpr({target_fpr:.2f}): {thr:.4f} (FPR={fpr[idx]:.4f}, TPR={tpr[idx]:.4f})")
@@ -76,8 +87,35 @@ prec, rec, f1, _ = precision_recall_fscore_support(
     y_true, y_pred, average="binary", zero_division=0
 )
 
+metadata = infer_metadata(d)
+output_payload = {
+    "experiment_name": results_path.name,
+    "detection_method": metadata["detection_method"],
+    "model_used": metadata["model_used"],
+    "dataset_used": metadata["dataset_used"],
+    "num_samples": int(len(y_true)),
+    "additional_details": {
+        "additional_models_used": metadata["additional_models_used"],
+        "notes": metadata["notes"]
+    },
+    "metrics": {
+        "f1_at_1pct_fpr": float(f1),
+        "accuracy": float(acc),
+        "precision": float(prec),
+        "recall": float(rec),
+        "auc_roc": float(roc_auc)
+    }
+}
+
+output_dir = Path(__file__).resolve().parent / "metric_results"
+output_dir.mkdir(parents=True, exist_ok=True)
+output_path = output_dir / f"RESULTS_{results_path.stem}.json"
+
+with open(output_path, "w", encoding="utf-8") as f:
+    json.dump(output_payload, f, indent=2)
+
 print("ROC-AUC:", roc_auc)
-print("TPR@1%FPR:", tpr_at_1pct)
 print("threshold:", thr)
 print("confusion matrix [[TN, FP], [FN, TP]] =", [[tn, fp], [fn, tp]])
 print("accuracy:", acc, "precision:", prec, "recall:", rec, "f1:", f1)
+print("Saved metrics JSON to:", output_path)
