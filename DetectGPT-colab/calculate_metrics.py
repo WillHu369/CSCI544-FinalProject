@@ -18,11 +18,22 @@ args = parser.parse_args()
 
 
 def infer_metadata(results_dict):
+    args_path = results_path.parent / "args.json"
+    args_dict = {}
+    if args_path.exists():
+        with open(args_path, "r", encoding="utf-8") as f:
+            args_dict = json.load(f)
+
+    mask_model_name = args_dict.get("mask_filling_model_name")
+    additional_models = []
+    if isinstance(mask_model_name, str) and mask_model_name.strip():
+        additional_models = [mask_model_name]
+
     return {
-        "detection_method": results_dict.get("detection_method", "unknown"),
-        "model_used": results_dict.get("model_used", "unknown"),
-        "dataset_used": results_dict.get("dataset_used", "unknown"),
-        "additional_models_used": results_dict.get("additional_models_used", []),
+        "detection_method": "DetectGPT",
+        "model_used": args_dict.get("base_model_name", results_dict.get("model_used", "unknown")),
+        "dataset_used": args_dict.get("dataset", results_dict.get("dataset_used", "unknown")),
+        "additional_models_used": additional_models or results_dict.get("additional_models_used", []),
         "notes": results_dict.get("notes", "")
     }
 
@@ -35,6 +46,35 @@ def select_threshold_at_target_fpr(fpr, tpr, thresholds, target_fpr=0.01):
     else:
         idx = int(valid[np.argmax(tpr[valid])])
     return idx
+
+
+def compute_binary_metrics_at_target_fpr(y_true, y_score, target_fpr):
+    fpr, tpr, thresholds = roc_curve(y_true, y_score)
+    idx = select_threshold_at_target_fpr(fpr, tpr, thresholds, target_fpr=target_fpr)
+
+    thr = thresholds[idx]
+    y_pred = (y_score >= thr).astype(int)
+
+    tn, fp, fn, tp = confusion_matrix(y_true, y_pred).ravel()
+    acc = accuracy_score(y_true, y_pred)
+    prec, rec, f1, _ = precision_recall_fscore_support(
+        y_true, y_pred, average="binary", zero_division=0
+    )
+
+    return {
+        "target_fpr": float(target_fpr),
+        "selected_threshold": float(thr),
+        "actual_fpr": float(fpr[idx]),
+        "actual_tpr": float(tpr[idx]),
+        "tn": int(tn),
+        "fp": int(fp),
+        "fn": int(fn),
+        "tp": int(tp),
+        "accuracy": float(acc),
+        "precision": float(prec),
+        "recall": float(rec),
+        "f1": float(f1),
+    }
 
 def resolve_results_path(path_str):
     p = Path(path_str)
@@ -71,20 +111,20 @@ y_score = np.concatenate([real, samples])
 
 # Threshold-free metrics
 roc_auc = roc_auc_score(y_true, y_score)
-fpr, tpr, thresholds = roc_curve(y_true, y_score)
 
-# Pick threshold at 1% FPR operating region.
-target_fpr = 0.01
-idx = select_threshold_at_target_fpr(fpr, tpr, thresholds, target_fpr=target_fpr)
+# Evaluate at 1% FPR (0.01) and 0.01% FPR (0.0001).
+metrics_at_1pct = compute_binary_metrics_at_target_fpr(y_true, y_score, target_fpr=0.01)
+metrics_at_0_01pct = compute_binary_metrics_at_target_fpr(y_true, y_score, target_fpr=0.0001)
 
-thr = thresholds[idx]
-print(f"Selected threshold for target_fpr({target_fpr:.2f}): {thr:.4f} (FPR={fpr[idx]:.4f}, TPR={tpr[idx]:.4f})")
-y_pred = (y_score >= thr).astype(int)
-
-tn, fp, fn, tp = confusion_matrix(y_true, y_pred).ravel()
-acc = accuracy_score(y_true, y_pred)
-prec, rec, f1, _ = precision_recall_fscore_support(
-    y_true, y_pred, average="binary", zero_division=0
+print(
+    "Selected threshold for target_fpr(1.00%): "
+    f"{metrics_at_1pct['selected_threshold']:.4f} "
+    f"(FPR={metrics_at_1pct['actual_fpr']:.4f}, TPR={metrics_at_1pct['actual_tpr']:.4f})"
+)
+print(
+    "Selected threshold for target_fpr(0.01%): "
+    f"{metrics_at_0_01pct['selected_threshold']:.4f} "
+    f"(FPR={metrics_at_0_01pct['actual_fpr']:.4f}, TPR={metrics_at_0_01pct['actual_tpr']:.4f})"
 )
 
 metadata = infer_metadata(d)
@@ -99,10 +139,11 @@ output_payload = {
         "notes": metadata["notes"]
     },
     "metrics": {
-        "f1_at_1pct_fpr": float(f1),
-        "accuracy": float(acc),
-        "precision": float(prec),
-        "recall": float(rec),
+        "f1_at_1pct_fpr": metrics_at_1pct["f1"],
+        "f1_at_0_01pct_fpr": metrics_at_0_01pct["f1"],
+        "accuracy": metrics_at_1pct["accuracy"],
+        "precision": metrics_at_1pct["precision"],
+        "recall": metrics_at_1pct["recall"],
         "auc_roc": float(roc_auc)
     }
 }
@@ -115,7 +156,21 @@ with open(output_path, "w", encoding="utf-8") as f:
     json.dump(output_payload, f, indent=2)
 
 print("ROC-AUC:", roc_auc)
-print("threshold:", thr)
-print("confusion matrix [[TN, FP], [FN, TP]] =", [[tn, fp], [fn, tp]])
-print("accuracy:", acc, "precision:", prec, "recall:", rec, "f1:", f1)
+print("threshold @1% FPR:", metrics_at_1pct["selected_threshold"])
+print(
+    "confusion matrix @1% FPR [[TN, FP], [FN, TP]] =",
+    [[metrics_at_1pct["tn"], metrics_at_1pct["fp"]], [metrics_at_1pct["fn"], metrics_at_1pct["tp"]]],
+)
+print(
+    "accuracy:",
+    metrics_at_1pct["accuracy"],
+    "precision:",
+    metrics_at_1pct["precision"],
+    "recall:",
+    metrics_at_1pct["recall"],
+    "f1@1%:",
+    metrics_at_1pct["f1"],
+    "f1@0.01%:",
+    metrics_at_0_01pct["f1"],
+)
 print("Saved metrics JSON to:", output_path)
