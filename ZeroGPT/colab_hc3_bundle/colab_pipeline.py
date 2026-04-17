@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from collections.abc import Mapping
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -28,6 +29,7 @@ GPTZERO_MODEL_DIR = ARTIFACTS_DIR / "models" / "gptzero_like"
 BASELINE_RUN_DIR = ARTIFACTS_DIR / "runs" / "hc3_baselines_run"
 GPTZERO_RUN_DIR = ARTIFACTS_DIR / "runs" / "hc3_gptzero_run"
 REFERENCE_GPTZERO_METRICS_DIR = ARTIFACTS_DIR / "runs" / "hc3_gptzero_full_run" / "metrics"
+DEFAULT_COLAB_TARGET_FPRS = (0.01, 0.0001)
 
 
 def _normalize_score_splits(values: list[str] | tuple[str, ...] | None) -> list[str]:
@@ -47,7 +49,17 @@ def _normalize_score_splits(values: list[str] | tuple[str, ...] | None) -> list[
     return normalized or list(VALID_SCORE_SPLITS)
 
 
-def _resolve_split_path(data_dir: Path | str, split: str) -> Path:
+def _resolve_split_path(
+    data_dir: Path | str,
+    split: str,
+    split_paths: Mapping[str, Path | str] | None = None,
+) -> Path:
+    if split_paths and split in split_paths:
+        explicit_path = Path(split_paths[split])
+        if explicit_path.exists():
+            return explicit_path
+        raise FileNotFoundError(f"Explicit dataset split path for '{split}' does not exist: {explicit_path}")
+
     data_dir = Path(data_dir)
     candidates = (
         data_dir / f"{split}.parquet",
@@ -64,13 +76,18 @@ def _resolve_split_path(data_dir: Path | str, split: str) -> Path:
     )
 
 
-def find_split_path(data_dir: Path | str, split: str) -> Path:
-    return _resolve_split_path(data_dir, split)
+def find_split_path(
+    data_dir: Path | str,
+    split: str,
+    split_paths: Mapping[str, Path | str] | None = None,
+) -> Path:
+    return _resolve_split_path(data_dir, split, split_paths)
 
 
 @dataclass
 class ColabExperimentConfig:
     data_dir: Path = DATA_DIR
+    split_paths: Mapping[str, Path | str] | None = None
     baseline_model_dir: Path = BASELINE_MODEL_DIR
     gptzero_model_dir: Path = GPTZERO_MODEL_DIR
     baseline_run_dir: Path = BASELINE_RUN_DIR
@@ -85,6 +102,7 @@ class ColabExperimentConfig:
     max_sentences_per_text: int | None = None
     score_splits: tuple[str, ...] = ("test",)
     target_fpr: float = 0.01
+    target_fprs: tuple[float, ...] = DEFAULT_COLAB_TARGET_FPRS
     word_max_features: int = 20000
     char_max_features: int = 15000
     min_df: int = 2
@@ -165,10 +183,12 @@ def train_baselines(config: ColabExperimentConfig) -> dict:
         xgb_early_stopping_rounds=config.xgb_early_stopping_rounds,
         xgb_eval_log_interval=config.xgb_eval_log_interval,
     )
-    train_source = _resolve_split_path(config.data_dir, "train")
+    train_source = _resolve_split_path(config.data_dir, "train", config.split_paths)
     try:
-        val_source = _resolve_split_path(config.data_dir, "val")
+        val_source = _resolve_split_path(config.data_dir, "val", config.split_paths)
     except FileNotFoundError:
+        if config.split_paths and "val" in config.split_paths:
+            raise
         val_source = None
     return train_classical_baselines(
         train_source=train_source,
@@ -189,10 +209,12 @@ def train_gptzero(config: ColabExperimentConfig) -> dict:
         perplexity_batch_size=config.perplexity_batch_size,
     )
     feature_config = FeatureExtractionConfig(max_sentences_per_text=config.max_sentences_per_text)
-    train_source = _resolve_split_path(config.data_dir, "train")
+    train_source = _resolve_split_path(config.data_dir, "train", config.split_paths)
     try:
-        val_source = _resolve_split_path(config.data_dir, "val")
+        val_source = _resolve_split_path(config.data_dir, "val", config.split_paths)
     except FileNotFoundError:
+        if config.split_paths and "val" in config.split_paths:
+            raise
         val_source = None
     return train_gptzero_like_detector(
         train_source=train_source,
@@ -207,6 +229,7 @@ def train_gptzero(config: ColabExperimentConfig) -> dict:
 def score_models(
     *,
     data_dir: Path | str = DATA_DIR,
+    split_paths: Mapping[str, Path | str] | None = None,
     run_dir: Path | str,
     run_id: str | None = None,
     baseline_model_dir: Path | str | None = None,
@@ -238,8 +261,10 @@ def score_models(
     scored_splits: list[str] = []
     for split in requested_splits:
         try:
-            split_path = _resolve_split_path(data_dir, split)
+            split_path = _resolve_split_path(data_dir, split, split_paths)
         except FileNotFoundError:
+            if split_paths and split in split_paths:
+                raise
             continue
 
         split_predictions = []
@@ -264,6 +289,7 @@ def score_models(
         {
             "run_id": run_id,
             "data_dir": str(data_dir),
+            "split_paths": {key: str(value) for key, value in split_paths.items()} if split_paths else None,
             "baseline_model_dir": str(baseline_model_dir) if baseline_model_dir else None,
             "gptzero_model_dir": str(gptzero_model_dir) if gptzero_model_dir else None,
             "score_splits": scored_splits,
@@ -280,16 +306,20 @@ def score_models(
 def evaluate_run(
     *,
     data_dir: Path | str = DATA_DIR,
+    split_paths: Mapping[str, Path | str] | None = None,
     predictions_dir: Path | str,
     output_dir: Path | str,
     target_fpr: float = 0.01,
+    target_fprs: tuple[float, ...] | None = None,
 ) -> dict:
     sample_frames = []
     prediction_frames = []
     for split in VALID_SCORE_SPLITS:
         try:
-            sample_path = _resolve_split_path(data_dir, split)
+            sample_path = _resolve_split_path(data_dir, split, split_paths)
         except FileNotFoundError:
+            if split_paths and split in split_paths:
+                raise
             sample_path = None
         prediction_path = Path(predictions_dir) / f"{split}.parquet"
         if sample_path is not None and sample_path.exists():
@@ -304,7 +334,7 @@ def evaluate_run(
 
     samples = pd.concat(sample_frames, ignore_index=True)
     predictions = pd.concat(prediction_frames, ignore_index=True)
-    return evaluate_predictions(samples, predictions, output_dir, target_fpr=target_fpr)
+    return evaluate_predictions(samples, predictions, output_dir, target_fpr=target_fpr, target_fprs=target_fprs)
 
 
 def run_baseline_reference(
@@ -322,6 +352,7 @@ def run_baseline_reference(
     try:
         scoring = score_models(
             data_dir=config.data_dir,
+            split_paths=config.split_paths,
             run_dir=config.baseline_run_dir,
             baseline_model_dir=config.baseline_model_dir,
             gptzero_model_dir=None,
@@ -345,9 +376,11 @@ def run_baseline_reference(
 
     evaluation = evaluate_run(
         data_dir=config.data_dir,
+        split_paths=config.split_paths,
         predictions_dir=Path(scoring["predictions_dir"]),
         output_dir=Path(config.baseline_run_dir) / "metrics",
         target_fpr=config.target_fpr,
+        target_fprs=config.target_fprs,
     )
     return {"training": training, "scoring": scoring, "evaluation": evaluation}
 
@@ -366,6 +399,7 @@ def run_gptzero_experiment(
 
     scoring = score_models(
         data_dir=config.data_dir,
+        split_paths=config.split_paths,
         run_dir=config.gptzero_run_dir,
         baseline_model_dir=None,
         gptzero_model_dir=config.gptzero_model_dir,
@@ -374,9 +408,11 @@ def run_gptzero_experiment(
     )
     evaluation = evaluate_run(
         data_dir=config.data_dir,
+        split_paths=config.split_paths,
         predictions_dir=Path(scoring["predictions_dir"]),
         output_dir=Path(config.gptzero_run_dir) / "metrics",
         target_fpr=config.target_fpr,
+        target_fprs=config.target_fprs,
     )
     return {"training": training, "scoring": scoring, "evaluation": evaluation}
 
@@ -411,6 +447,7 @@ __all__ = [
     "PROJECT_ROOT",
     "ColabExperimentConfig",
     "DATA_DIR",
+    "DEFAULT_COLAB_TARGET_FPRS",
     "GPTZERO_MODEL_DIR",
     "GPTZERO_RUN_DIR",
     "REFERENCE_GPTZERO_METRICS_DIR",

@@ -365,10 +365,18 @@ class GPTZeroLikeDetector:
         scorer_config: ScorerConfig | None = None,
         feature_config: FeatureExtractionConfig | None = None,
         calibrator: Pipeline | None = None,
+        decision_threshold: float = 0.5,
+        threshold_selection: dict | None = None,
     ):
         self.scorer_config = scorer_config or ScorerConfig()
         self.feature_config = feature_config or FeatureExtractionConfig()
         self.calibrator = calibrator
+        self.decision_threshold = float(decision_threshold)
+        self.threshold_selection = threshold_selection or {
+            "objective": "default",
+            "threshold": self.decision_threshold,
+            "source": "default",
+        }
 
     def build_feature_frame(
         self,
@@ -468,6 +476,72 @@ class GPTZeroLikeDetector:
         self.calibrator.fit(x, y)
         return self
 
+    def _predict_probabilities(self, feature_frame: pd.DataFrame) -> np.ndarray:
+        if self.calibrator is None:
+            raise RuntimeError("The GPTZero-like detector has not been fitted yet.")
+        x = self._to_model_matrix(feature_frame)
+        return self.calibrator.predict_proba(x)[:, 1]
+
+    @staticmethod
+    def _threshold_metrics(y_true: np.ndarray, y_prob: np.ndarray, threshold: float) -> dict:
+        y_pred = (y_prob >= threshold).astype(int)
+        tp = int(((y_true == 1) & (y_pred == 1)).sum())
+        fp = int(((y_true == 0) & (y_pred == 1)).sum())
+        tn = int(((y_true == 0) & (y_pred == 0)).sum())
+        fn = int(((y_true == 1) & (y_pred == 0)).sum())
+        precision = tp / (tp + fp) if tp + fp else 0.0
+        recall = tp / (tp + fn) if tp + fn else 0.0
+        f1 = 2 * precision * recall / (precision + recall) if precision + recall else 0.0
+        accuracy = (tp + tn) / len(y_true) if len(y_true) else 0.0
+        return {
+            "threshold": float(threshold),
+            "accuracy": float(accuracy),
+            "precision": float(precision),
+            "recall": float(recall),
+            "f1": float(f1),
+            "tn": tn,
+            "fp": fp,
+            "fn": fn,
+            "tp": tp,
+        }
+
+    def select_threshold_from_features(
+        self,
+        feature_frame: pd.DataFrame,
+        labels: pd.Series,
+        *,
+        split_name: str = "val",
+        objective: str = "f1",
+    ) -> dict:
+        y_true = labels.map(LABEL_TO_ID).to_numpy(dtype=int)
+        y_prob = self._predict_probabilities(feature_frame)
+        if len(y_true) == 0 or len(np.unique(y_true)) < 2:
+            self.decision_threshold = 0.5
+            self.threshold_selection = {
+                "objective": objective,
+                "split": split_name,
+                "threshold": self.decision_threshold,
+                "source": "fallback",
+                "reason": "threshold selection requires both classes",
+            }
+            return self.threshold_selection
+
+        candidates = np.unique(np.concatenate([np.asarray([0.5]), y_prob]))
+        rows = [self._threshold_metrics(y_true, y_prob, threshold) for threshold in candidates]
+        if objective != "f1":
+            raise ValueError(f"Unsupported threshold selection objective: {objective}")
+
+        best = max(rows, key=lambda row: (row["f1"], row["accuracy"], row["precision"], row["recall"]))
+        self.decision_threshold = float(best["threshold"])
+        self.threshold_selection = {
+            "objective": objective,
+            "split": split_name,
+            "source": "validation" if split_name == "val" else split_name,
+            **best,
+            "num_samples": int(len(y_true)),
+        }
+        return self.threshold_selection
+
     def predict_from_features(self, feature_frame: pd.DataFrame, run_id: str) -> pd.DataFrame:
         if self.calibrator is None:
             raise RuntimeError("The GPTZero-like detector has not been fitted yet.")
@@ -478,7 +552,7 @@ class GPTZeroLikeDetector:
         else:
             clipped = np.clip(probabilities, 1e-6, 1 - 1e-6)
             scores = np.log(clipped / (1 - clipped))
-        labels = [ID_TO_LABEL[int(value)] for value in (probabilities >= 0.5).astype(int)]
+        labels = [ID_TO_LABEL[int(value)] for value in (probabilities >= self.decision_threshold).astype(int)]
         predictions = pd.DataFrame(
             {
                 "run_id": run_id,
@@ -487,9 +561,16 @@ class GPTZeroLikeDetector:
                 "score": scores,
                 "prob_ai": probabilities,
                 "pred_label": labels,
+                "decision_threshold": self.decision_threshold,
             }
         )
-        return pd.concat([predictions[PREDICTION_COLUMNS], feature_frame[self.feature_columns].reset_index(drop=True)], axis=1)
+        return pd.concat(
+            [
+                predictions[PREDICTION_COLUMNS + ["decision_threshold"]],
+                feature_frame[self.feature_columns].reset_index(drop=True),
+            ],
+            axis=1,
+        )
 
     def save(self, output_dir: Path | str) -> None:
         destination = ensure_dir(output_dir)
@@ -501,6 +582,8 @@ class GPTZeroLikeDetector:
                 "scorer_config": asdict(self.scorer_config),
                 "feature_config": asdict(self.feature_config),
                 "calibrator": self.calibrator,
+                "decision_threshold": self.decision_threshold,
+                "threshold_selection": self.threshold_selection,
             },
             temporary_joblib,
         )
@@ -511,6 +594,8 @@ class GPTZeroLikeDetector:
                 "feature_columns": self.feature_columns,
                 "scorer_config": asdict(self.scorer_config),
                 "feature_config": asdict(self.feature_config),
+                "decision_threshold": self.decision_threshold,
+                "threshold_selection": self.threshold_selection,
             },
             Path(destination) / "metadata.json",
         )
@@ -520,7 +605,13 @@ class GPTZeroLikeDetector:
         payload = joblib.load(Path(output_dir) / "gptzero_like.joblib")
         scorer_config = ScorerConfig(**payload["scorer_config"])
         feature_config = FeatureExtractionConfig(**payload.get("feature_config", {}))
-        return cls(scorer_config=scorer_config, feature_config=feature_config, calibrator=payload["calibrator"])
+        return cls(
+            scorer_config=scorer_config,
+            feature_config=feature_config,
+            calibrator=payload["calibrator"],
+            decision_threshold=float(payload.get("decision_threshold", 0.5)),
+            threshold_selection=payload.get("threshold_selection"),
+        )
 
 
 def train_gptzero_like_detector(
@@ -566,6 +657,18 @@ def train_gptzero_like_detector(
 
     print("[gptzero] fitting detector on train features")
     detector.fit_from_features(train_features, train_features["label"])
+    print(f"[gptzero] selecting decision threshold on {calibration_split} features")
+    threshold_selection = detector.select_threshold_from_features(
+        calibration_features,
+        calibration_features["label"],
+        split_name=calibration_split,
+        objective="f1",
+    )
+    print(
+        "[gptzero] selected decision threshold "
+        f"{detector.decision_threshold:.6f} on {calibration_split} "
+        f"(f1={threshold_selection.get('f1', float('nan')):.4f})"
+    )
     detector.scorer_config.local_files_only = True
     detector.save(destination)
     print("[gptzero] saved detector artifacts")
@@ -576,6 +679,8 @@ def train_gptzero_like_detector(
         "calibration_split": calibration_split,
         "num_train_samples": int(len(train_features)),
         "num_calibration_samples": int(len(calibration_features)),
+        "decision_threshold": float(detector.decision_threshold),
+        "threshold_selection": threshold_selection,
         "feature_cache_dir": str(cache_dir),
         "scorer_config": asdict(scorer_config),
         "feature_config": asdict(detector.feature_config),
