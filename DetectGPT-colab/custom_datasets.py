@@ -12,6 +12,7 @@ DATASETS = [
     'german',
     'pubmed',
     'hc3_all',
+    'hc3_all_10000',
     'hc3_finance',
     'hc3_medicine',
     'hc3_qa',
@@ -111,6 +112,10 @@ def _load_hc3_csv(hc3_path):
 
 def load_hc3_all(cache_dir=None):
     return _load_hc3_csv('data/hc3/hc3_unified_1000_seed42.csv')
+
+
+def load_hc3_all_10000(cache_dir=None):
+    return _load_hc3_csv('data/hc3/hc3_unified_10000_seed42.csv')
 
 
 def load_hc3_finance(cache_dir=None):

@@ -641,7 +641,7 @@ def generate_data(dataset, key):
     data = [strip_newlines(x) for x in data]
 
     # try to keep only examples with > 250 words
-    if dataset in ['writing', 'squad', 'xsum', 'hc3_all', 'hc3_finance', 'hc3_medicine', 'hc3_qa', 'hc3_eli5', 'hc3_csai']:
+    if dataset in ['writing', 'squad', 'xsum', 'hc3_all', 'hc3_all_10000', 'hc3_finance', 'hc3_medicine', 'hc3_qa', 'hc3_eli5', 'hc3_csai']:
         long_data = [x for x in data if len(x.split()) > 250]
         if len(long_data) > 0:
             data = long_data
