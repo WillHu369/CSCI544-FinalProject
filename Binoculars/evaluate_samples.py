@@ -80,15 +80,15 @@ def predict_from_scores(scores, threshold: float):
     return (scores < threshold).astype(int)
 
 
-def f1_at_target_tpr(y_true, scores, target_tpr: float = 0.01) -> dict:
-    """Compute F1 at the lowest-threshold operating point that reaches target_tpr."""
+def f1_at_max_fpr(y_true, scores, max_fpr: float = 0.0001) -> dict:
+    """Compute the best F1 among thresholds whose human false-positive rate is <= max_fpr."""
     candidates = sorted(set(float(score) for score in scores))
     if not candidates:
         return {
             "f1": None,
             "threshold": None,
-            "target_tpr": target_tpr,
-            "actual_tpr": None,
+            "max_fpr": max_fpr,
+            "actual_fpr": None,
             "note": "No scores were available.",
         }
 
@@ -100,32 +100,37 @@ def f1_at_target_tpr(y_true, scores, target_tpr: float = 0.01) -> dict:
     best = None
     for threshold in thresholds:
         y_pred = predict_from_scores(scores, threshold)
-        actual_tpr = recall_score(y_true, y_pred, pos_label=1, zero_division=0)
+        tn, fp, fn, tp = confusion_matrix(y_true, y_pred, labels=[0, 1]).ravel()
+        actual_fpr = fp / (fp + tn) if (fp + tn) else 0.0
+        recall = tp / (tp + fn) if (tp + fn) else 0.0
         f1 = f1_score(y_true, y_pred, pos_label=1, zero_division=0)
 
-        if actual_tpr < target_tpr:
+        if actual_fpr > max_fpr:
             continue
 
-        excess_tpr = actual_tpr - target_tpr
-        if best is None or (excess_tpr, -f1) < (best["excess_tpr"], -best["f1"]):
+        if best is None or (f1, recall, -actual_fpr) > (
+            best["f1"],
+            best["recall"],
+            -best["actual_fpr"],
+        ):
             best = {
                 "f1": float(f1),
                 "threshold": float(threshold),
-                "target_tpr": float(target_tpr),
-                "actual_tpr": float(actual_tpr),
-                "excess_tpr": float(excess_tpr),
+                "max_fpr": float(max_fpr),
+                "actual_fpr": float(actual_fpr),
+                "recall": float(recall),
             }
 
     if best is None:
         return {
             "f1": None,
             "threshold": None,
-            "target_tpr": float(target_tpr),
-            "actual_tpr": None,
-            "note": "No threshold reached the target TPR.",
+            "max_fpr": float(max_fpr),
+            "actual_fpr": None,
+            "recall": None,
+            "note": "No threshold satisfied the target FPR.",
         }
 
-    best.pop("excess_tpr")
     return best
 
 
@@ -145,7 +150,8 @@ def compute_metrics(y_true, scores, threshold: float) -> dict:
         "precision": float(precision_score(y_true, y_pred, pos_label=1, zero_division=0)),
         "recall": float(recall_score(y_true, y_pred, pos_label=1, zero_division=0)),
         "f1": float(f1_score(y_true, y_pred, pos_label=1, zero_division=0)),
-        "f1_at_1pct_tpr": f1_at_target_tpr(y_true, scores, target_tpr=0.01),
+        "f1_at_1pct_fpr": f1_at_max_fpr(y_true, scores, max_fpr=0.01),
+        "f1_at_0_01pct_fpr": f1_at_max_fpr(y_true, scores, max_fpr=0.0001),
         "auc_roc": roc_auc,
         "confusion_matrix": matrix.tolist(),
         "confusion_matrix_labels": ["human", "ai"],
@@ -196,7 +202,8 @@ def main() -> None:
         "threshold": float(threshold),
         **metrics,
         # Report-friendly metric labels.
-        "F1@1%TPR": metrics["f1_at_1pct_tpr"]["f1"],
+        "F1@1%FPR": metrics["f1_at_1pct_fpr"]["f1"],
+        "F1@0.01%FPR": metrics["f1_at_0_01pct_fpr"]["f1"],
         "Accuracy": metrics["accuracy"],
         "Precision": metrics["precision"],
         "Recall": metrics["recall"],
