@@ -112,9 +112,9 @@ y_score = np.concatenate([real, samples])
 # Threshold-free metrics
 roc_auc = roc_auc_score(y_true, y_score)
 
-# Evaluate at 1% FPR (0.01) and 0.01% FPR (0.0001).
+# Evaluate at 1% FPR (0.01) and 0.1% FPR (0.001).
 metrics_at_1pct = compute_binary_metrics_at_target_fpr(y_true, y_score, target_fpr=0.01)
-metrics_at_0_01pct = compute_binary_metrics_at_target_fpr(y_true, y_score, target_fpr=0.0001)
+metrics_at_0_1pct = compute_binary_metrics_at_target_fpr(y_true, y_score, target_fpr=0.001)
 
 print(
     "Selected threshold for target_fpr(1.00%): "
@@ -122,9 +122,9 @@ print(
     f"(FPR={metrics_at_1pct['actual_fpr']:.4f}, TPR={metrics_at_1pct['actual_tpr']:.4f})"
 )
 print(
-    "Selected threshold for target_fpr(0.01%): "
-    f"{metrics_at_0_01pct['selected_threshold']:.4f} "
-    f"(FPR={metrics_at_0_01pct['actual_fpr']:.4f}, TPR={metrics_at_0_01pct['actual_tpr']:.4f})"
+    "Selected threshold for target_fpr(0.10%): "
+    f"{metrics_at_0_1pct['selected_threshold']:.4f} "
+    f"(FPR={metrics_at_0_1pct['actual_fpr']:.4f}, TPR={metrics_at_0_1pct['actual_tpr']:.4f})"
 )
 
 metadata = infer_metadata(d)
@@ -138,12 +138,18 @@ output_payload = {
         "additional_models_used": metadata["additional_models_used"],
         "notes": metadata["notes"]
     },
-    "metrics": {
-        "f1_at_1pct_fpr": metrics_at_1pct["f1"],
-        "f1_at_0_01pct_fpr": metrics_at_0_01pct["f1"],
+    "metrics_at_1pct_fpr": {
+        "f1": metrics_at_1pct["f1"],
         "accuracy": metrics_at_1pct["accuracy"],
         "precision": metrics_at_1pct["precision"],
         "recall": metrics_at_1pct["recall"],
+        "auc_roc": float(roc_auc)
+    },
+    "metrics_at_0.1pct_fpr": {
+        "f1": metrics_at_0_1pct["f1"],
+        "accuracy": metrics_at_0_1pct["accuracy"],
+        "precision": metrics_at_0_1pct["precision"],
+        "recall": metrics_at_0_1pct["recall"],
         "auc_roc": float(roc_auc)
     }
 }
@@ -170,7 +176,7 @@ print(
     metrics_at_1pct["recall"],
     "f1@1%:",
     metrics_at_1pct["f1"],
-    "f1@0.01%:",
-    metrics_at_0_01pct["f1"],
+    "f1@0.1%:",
+    metrics_at_0_1pct["f1"],
 )
 print("Saved metrics JSON to:", output_path)
