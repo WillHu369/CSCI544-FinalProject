@@ -40,7 +40,7 @@ METRICS_SHARE_DIR = PROJECT_ROOT / "metrics_share"
 TEST_DATASET_SAMPLE_DIR = ARTIFACTS_DIR / "data" / "test_dataset_samples"
 TEST_DATASET_RUN_DIR = ARTIFACTS_DIR / "runs" / "test_dataset"
 FILTERED_TRAINING_DATA_DIR = ARTIFACTS_DIR / "data" / "hc3_without_test_dataset"
-HC3_UNIFIED_TEST_FILENAME = "hc3_unified_1000_seed42_test.csv"
+HC3_UNIFIED_TEST_FILENAME = "hc3_unified_10000_seed42_clean_test.csv"
 SHARED_METRIC_TARGETS = (
     (0.01, "metrics_at_1pct_fpr"),
     (0.0001, "metrics_at_0.01pct_fpr"),
@@ -172,9 +172,9 @@ def _load_hc3_unified_rows(path: Path | str) -> list[dict]:
 
 def _candidate_hc3_unified_sources() -> list[Path]:
     return [
-        PROJECT_ROOT / "HC3-Dataset-Samples" / "hc3_unified_1000_seed42.csv",
-        PROJECT_ROOT.parent / "HC3-Dataset-Samples" / "hc3_unified_1000_seed42.csv",
-        PROJECT_ROOT.parent.parent / "HC3-Dataset-Samples" / "hc3_unified_1000_seed42.csv",
+        PROJECT_ROOT / "HC3-Dataset-Samples" / "hc3_unified_10000_seed42_clean.csv",
+        PROJECT_ROOT.parent / "HC3-Dataset-Samples" / "hc3_unified_10000_seed42_clean.csv",
+        PROJECT_ROOT.parent.parent / "HC3-Dataset-Samples" / "hc3_unified_10000_seed42_clean.csv",
     ]
 
 
@@ -195,7 +195,7 @@ def ensure_hc3_unified_test_file(
             shutil.copy2(candidate, destination)
             return destination
     raise FileNotFoundError(
-        "Could not find hc3_unified_1000_seed42.csv to copy into test_dataset. "
+        "Could not find hc3_unified_10000_seed42_clean.csv to copy into test_dataset. "
         f"Checked: {', '.join(str(path) for path in candidates)}"
     )
 

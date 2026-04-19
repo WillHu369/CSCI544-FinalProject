@@ -545,6 +545,38 @@ def sample_source_rows(
     return sorted(sampled_rows, key=sort_key)
 
 
+def validate_shard_args(num_shards: int, shard_index: int) -> None:
+    if num_shards < 1:
+        raise ValueError("--num-shards must be at least 1.")
+    if shard_index < 1 or shard_index > num_shards:
+        raise ValueError(f"--shard-index must be in [1, {num_shards}], got {shard_index}.")
+
+
+def shard_tag(num_shards: int, shard_index: int) -> str:
+    width = max(2, len(str(num_shards)))
+    return f"shard_{shard_index:0{width}d}_of_{num_shards:0{width}d}"
+
+
+def shard_source_rows(rows: list[dict[str, Any]], *, num_shards: int, shard_index: int) -> list[dict[str, Any]]:
+    validate_shard_args(num_shards, shard_index)
+    if num_shards == 1:
+        return [copy.deepcopy(row) for row in rows]
+
+    zero_based_shard = shard_index - 1
+    domain_to_rows: dict[str, list[dict[str, Any]]] = {}
+    for row in rows:
+        domain = str(row.get("source") or "unknown")
+        domain_to_rows.setdefault(domain, []).append(row)
+
+    selected: list[dict[str, Any]] = []
+    for domain in sorted(domain_to_rows):
+        for row_index, row in enumerate(domain_to_rows[domain]):
+            if row_index % num_shards == zero_based_shard:
+                selected.append(copy.deepcopy(row))
+
+    return selected
+
+
 def prepare_control_frame(
     source_rows: list[dict[str, Any]],
     *,
@@ -641,25 +673,158 @@ def load_export_source_rows(experiment_dir: Path, source_file: Path) -> tuple[li
     return load_source_rows(selected_source_file), selected_source_file
 
 
-def build_hc3_source_lookup(source_rows: list[dict[str, Any]]) -> dict[tuple[str, str], dict[str, Any]]:
-    lookup: dict[tuple[str, str], dict[str, Any]] = {}
-    duplicate_keys: list[tuple[str, str]] = []
+def nonempty_answer_list(value: Any) -> list[str]:
+    return [answer for answer in decode_list_cell(value) if normalize_group_value(answer)]
+
+
+def build_hc3_source_lookup(source_rows: list[dict[str, Any]]) -> dict[str, Any]:
+    helpers = get_hc3_helpers()
+    normalized_samples = helpers.normalize_hc3_rows(source_rows, dataset_name="hc3").reset_index(drop=True)
+    source_payloads: list[dict[str, Any]] = []
+    sample_id_to_row_index: dict[str, int] = {}
+    sample_id_to_ai_answer_order: dict[str, int] = {}
+    sample_id_to_ai_answer_text: dict[str, str] = {}
+    key_to_row_indices: dict[tuple[str, str], list[int]] = {}
+    cursor = 0
+
     for row_index, row in enumerate(source_rows):
         key = hc3_row_key(row.get("source"), row.get("question"))
-        if key in lookup:
-            duplicate_keys.append(key)
+        human_answers = nonempty_answer_list(row.get("human_answers"))
+        ai_answers = nonempty_answer_list(row.get("chatgpt_answers"))
+        source_payloads.append(
+            {
+                "order": row_index,
+                "key": key,
+                "hc3_row_id": clean_scalar(row.get("hc3_row_id")),
+                "source": clean_scalar(row.get("source")),
+                "question": clean_scalar(row.get("question")),
+                "human_answers": human_answers,
+                "chatgpt_answers": ai_answers,
+            }
+        )
+        key_to_row_indices.setdefault(key, []).append(row_index)
+
+        for _ in human_answers:
+            if cursor >= len(normalized_samples):
+                raise ValueError("HC3 source normalization produced fewer rows than expected while mapping human answers.")
+            sample = normalized_samples.iloc[cursor]
+            if clean_scalar(sample.get("label")) != "human":
+                raise ValueError(
+                    "Unexpected HC3 normalized row order while mapping human answers. "
+                    f"Expected human, got {sample.get('label')!r} at normalized row {cursor}."
+                )
+            sample_id_to_row_index[clean_scalar(sample.get("sample_id"))] = row_index
+            cursor += 1
+
+        for answer_order, _ in enumerate(ai_answers):
+            if cursor >= len(normalized_samples):
+                raise ValueError("HC3 source normalization produced fewer rows than expected while mapping AI answers.")
+            sample = normalized_samples.iloc[cursor]
+            if clean_scalar(sample.get("label")) != "ai":
+                raise ValueError(
+                    "Unexpected HC3 normalized row order while mapping AI answers. "
+                    f"Expected ai, got {sample.get('label')!r} at normalized row {cursor}."
+                )
+            sample_id = clean_scalar(sample.get("sample_id"))
+            sample_id_to_row_index[sample_id] = row_index
+            sample_id_to_ai_answer_order[sample_id] = answer_order
+            sample_id_to_ai_answer_text[sample_id] = ai_answers[answer_order]
+            cursor += 1
+
+    if cursor != len(normalized_samples):
+        raise ValueError(
+            f"HC3 source normalization mapping consumed {cursor} rows, "
+            f"but normalized source contains {len(normalized_samples)} rows."
+        )
+
+    return {
+        "rows": source_payloads,
+        "sample_id_to_row_index": sample_id_to_row_index,
+        "sample_id_to_ai_answer_order": sample_id_to_ai_answer_order,
+        "sample_id_to_ai_answer_text": sample_id_to_ai_answer_text,
+        "key_to_row_indices": key_to_row_indices,
+    }
+
+
+def hc3_source_row_identity(row: dict[str, Any]) -> tuple[str, str, str]:
+    return (
+        clean_scalar(row.get("hc3_row_id")),
+        normalize_group_value(row.get("source")),
+        normalize_group_value(row.get("question")),
+    )
+
+
+def build_hc3_source_lookup_for_experiment(experiment_dir: Path, source_rows: list[dict[str, Any]]) -> dict[str, Any]:
+    base_lookup = build_hc3_source_lookup(source_rows)
+    generation_manifest_path = experiment_dir / "generation_manifest.json"
+    if not generation_manifest_path.exists():
+        return base_lookup
+
+    try:
+        generation_manifest = json.loads(generation_manifest_path.read_text(encoding="utf-8"))
+    except json.JSONDecodeError:
+        return base_lookup
+
+    shard_manifests = generation_manifest.get("merged_shard_manifests") or []
+    if not shard_manifests:
+        return base_lookup
+
+    row_identity_to_index = {
+        hc3_source_row_identity(source_payload): row_index
+        for row_index, source_payload in enumerate(base_lookup["rows"])
+    }
+    sample_id_to_row_index: dict[str, int] = {}
+    sample_id_to_ai_answer_order: dict[str, int] = {}
+    sample_id_to_ai_answer_text: dict[str, str] = {}
+
+    for shard_manifest in shard_manifests:
+        shard_dir_text = shard_manifest.get("_shard_dir")
+        if not shard_dir_text:
             continue
-        lookup[key] = {
+        shard_source_path = Path(shard_dir_text) / "sampled_source_rows.csv"
+        if not shard_source_path.exists():
+            continue
+        shard_source_rows = load_source_rows(shard_source_path)
+        shard_lookup = build_hc3_source_lookup(shard_source_rows)
+
+        shard_row_to_global_index: dict[int, int] = {}
+        for shard_row_index, shard_payload in enumerate(shard_lookup["rows"]):
+            identity = hc3_source_row_identity(shard_payload)
+            if identity in row_identity_to_index:
+                shard_row_to_global_index[shard_row_index] = row_identity_to_index[identity]
+
+        for sample_id, shard_row_index in shard_lookup["sample_id_to_row_index"].items():
+            if shard_row_index in shard_row_to_global_index:
+                sample_id_to_row_index[sample_id] = shard_row_to_global_index[shard_row_index]
+        for sample_id, answer_order in shard_lookup["sample_id_to_ai_answer_order"].items():
+            sample_id_to_ai_answer_order[sample_id] = answer_order
+        for sample_id, answer_text in shard_lookup["sample_id_to_ai_answer_text"].items():
+            sample_id_to_ai_answer_text[sample_id] = answer_text
+
+    if not sample_id_to_row_index:
+        return base_lookup
+
+    merged_lookup = dict(base_lookup)
+    merged_lookup["sample_id_to_row_index"] = sample_id_to_row_index
+    merged_lookup["sample_id_to_ai_answer_order"] = sample_id_to_ai_answer_order
+    merged_lookup["sample_id_to_ai_answer_text"] = sample_id_to_ai_answer_text
+    return merged_lookup
+
+
+def build_legacy_hc3_source_lookup(source_rows: list[dict[str, Any]]) -> dict[tuple[str, str], dict[str, Any]]:
+    lookup: dict[tuple[str, str], dict[str, Any]] = {}
+    for row_index, row in enumerate(source_rows):
+        key = hc3_row_key(row.get("source"), row.get("question"))
+        lookup.setdefault(
+            key,
+            {
             "order": row_index,
             "hc3_row_id": clean_scalar(row.get("hc3_row_id")),
             "source": clean_scalar(row.get("source")),
             "question": clean_scalar(row.get("question")),
             "human_answers": decode_list_cell(row.get("human_answers")),
-        }
-
-    if duplicate_keys:
-        preview = ", ".join(f"{source}: {question[:60]}" for source, question in duplicate_keys[:5])
-        raise ValueError(f"Cannot export HC3 format because source rows contain duplicate questions: {preview}")
+            },
+        )
     return lookup
 
 
@@ -692,43 +857,84 @@ def discover_generated_dataset_dirs(experiment_dir: Path) -> list[tuple[str, str
 def convert_detector_frame_to_hc3(
     frame: pd.DataFrame,
     *,
-    source_lookup: dict[tuple[str, str], dict[str, Any]],
-    ai_sample_order: dict[str, int],
+    source_lookup: dict[str, Any],
 ) -> pd.DataFrame:
     required_columns = {"domain", "prompt", "text", "label", "sample_id"}
     missing = sorted(required_columns.difference(frame.columns))
     if missing:
         raise ValueError(f"Generated dataset is missing required columns: {', '.join(missing)}")
 
-    grouped_ai_answers: dict[tuple[str, str], list[tuple[int, str]]] = {}
-    row_keys: set[tuple[str, str]] = set()
-    missing_source_keys: list[tuple[str, str]] = []
+    source_rows = source_lookup["rows"]
+    sample_id_to_row_index = source_lookup["sample_id_to_row_index"]
+    sample_id_to_ai_answer_order = source_lookup["sample_id_to_ai_answer_order"]
+    sample_id_to_ai_answer_text = source_lookup.get("sample_id_to_ai_answer_text", {})
+    key_to_row_indices = source_lookup["key_to_row_indices"]
+    grouped_ai_answers: dict[int, list[tuple[int, str]]] = {}
+    fallback_ai_answers_by_original_text: dict[str, list[tuple[int, str]]] = {}
+    missing_source_rows: list[tuple[str, str, str]] = []
 
     for row_position, row in enumerate(frame.to_dict(orient="records")):
         key = hc3_row_key(row.get("domain"), row.get("prompt"))
-        row_keys.add(key)
-        if key not in source_lookup:
-            missing_source_keys.append(key)
-            continue
-
-        if clean_scalar(row.get("label")).lower() != "ai":
-            continue
-
+        label = clean_scalar(row.get("label")).lower()
         parent_sample_id = clean_scalar(row.get("parent_sample_id"))
-        source_sample_id = parent_sample_id or clean_scalar(row.get("sample_id"))
-        answer_order = ai_sample_order.get(source_sample_id, len(ai_sample_order) + row_position)
+        sample_id = clean_scalar(row.get("sample_id"))
+        source_sample_id = parent_sample_id if label == "ai" and parent_sample_id else sample_id
+        row_index = sample_id_to_row_index.get(source_sample_id)
+
+        if row_index is None:
+            candidate_indices = key_to_row_indices.get(key, [])
+            if len(candidate_indices) == 1:
+                row_index = candidate_indices[0]
+            else:
+                missing_source_rows.append((source_sample_id, key[0], key[1]))
+                continue
+
+        if label != "ai":
+            continue
+
+        answer_order = sample_id_to_ai_answer_order.get(source_sample_id, row_position)
         text = clean_scalar(row.get("text")).strip()
         if text:
-            grouped_ai_answers.setdefault(key, []).append((answer_order, text))
+            grouped_ai_answers.setdefault(row_index, []).append((answer_order, text))
+            original_answer_key = normalize_group_value(sample_id_to_ai_answer_text.get(source_sample_id))
+            if original_answer_key:
+                fallback_ai_answers_by_original_text.setdefault(original_answer_key, []).append((answer_order, text))
 
-    if missing_source_keys:
-        preview = ", ".join(f"{source}: {question[:60]}" for source, question in missing_source_keys[:5])
-        raise ValueError(f"Generated rows could not be matched to source HC3 questions: {preview}")
+    if missing_source_rows:
+        preview = ", ".join(
+            f"{sample_id or '<empty>'} / {source}: {question[:60]}"
+            for sample_id, source, question in missing_source_rows[:5]
+        )
+        raise ValueError(f"Generated rows could not be matched to source HC3 rows: {preview}")
+
+    def ordered_unique_texts(items: list[tuple[int, str]]) -> list[str]:
+        output: list[str] = []
+        seen: set[str] = set()
+        for _, text in sorted(items, key=lambda item: item[0]):
+            normalized = normalize_group_value(text)
+            if not normalized or normalized in seen:
+                continue
+            seen.add(normalized)
+            output.append(text)
+        return output
 
     records: list[dict[str, Any]] = []
-    for key in sorted(row_keys, key=lambda item: source_lookup[item]["order"]):
-        source_payload = source_lookup[key]
-        ai_answers = [text for _, text in sorted(grouped_ai_answers.get(key, []), key=lambda item: item[0])]
+    for row_index, source_payload in enumerate(source_rows):
+        ai_answers = ordered_unique_texts(grouped_ai_answers.get(row_index, []))
+        if not ai_answers and source_payload["chatgpt_answers"]:
+            reused_answers: list[str] = []
+            reused_keys: set[str] = set()
+            for answer_order, original_answer in enumerate(source_payload["chatgpt_answers"]):
+                original_answer_key = normalize_group_value(original_answer)
+                if not original_answer_key or original_answer_key in reused_keys:
+                    continue
+                reused_keys.add(original_answer_key)
+                candidates = ordered_unique_texts(fallback_ai_answers_by_original_text.get(original_answer_key, []))
+                if candidates:
+                    reused_answers.append(candidates[0])
+            ai_answers = reused_answers
+        if not ai_answers:
+            ai_answers = source_payload["chatgpt_answers"]
         records.append(
             {
                 "hc3_row_id": source_payload["hc3_row_id"],
@@ -746,8 +952,7 @@ def export_dataset_dir_to_hc3(
     source_dataset_dir: Path,
     destination_dir: Path,
     *,
-    source_lookup: dict[tuple[str, str], dict[str, Any]],
-    ai_sample_order: dict[str, int],
+    source_lookup: dict[str, Any],
 ) -> dict[str, Any]:
     ensure_dir(destination_dir)
     for stale_filename in HC3_STALE_SPLIT_EXPORT_FILES:
@@ -764,7 +969,6 @@ def export_dataset_dir_to_hc3(
         converted = convert_detector_frame_to_hc3(
             frame,
             source_lookup=source_lookup,
-            ai_sample_order=ai_sample_order,
         )
         destination_file = destination_dir / filename
         converted.to_csv(destination_file, index=False)
@@ -1189,6 +1393,9 @@ def build_sample_selection_summary(
     sample_fraction: float | None,
     seed: int,
     sampled_source_rows: list[dict[str, Any]],
+    pre_shard_source_rows: int | None = None,
+    num_shards: int = 1,
+    shard_index: int = 1,
 ) -> dict[str, Any]:
     summary = {
         "seed": seed,
@@ -1196,6 +1403,10 @@ def build_sample_selection_summary(
         "sample_fraction": sample_fraction,
         "sampled_source_rows": len(sampled_source_rows),
         "sampled_source_rows_by_domain": summarize_source_rows(sampled_source_rows)["domains"],
+        "pre_shard_source_rows": pre_shard_source_rows if pre_shard_source_rows is not None else len(sampled_source_rows),
+        "num_shards": num_shards,
+        "shard_index": shard_index,
+        "shard_tag": shard_tag(num_shards, shard_index),
     }
     if sample_rows is None and sample_fraction is None:
         summary["selection_mode"] = "full_source"
@@ -1216,9 +1427,16 @@ def format_sample_tag(sample_rows: int | None, sample_fraction: float | None) ->
 
 def resolve_output_dir(args: argparse.Namespace) -> Path:
     if args.output_dir is not None:
-        return Path(args.output_dir).resolve()
-    sample_tag = format_sample_tag(args.sample_rows, args.sample_fraction)
-    return (DEFAULT_OUTPUT_ROOT / f"{args.source_file.stem}_{sample_tag}_seed{args.seed}").resolve()
+        base = Path(args.output_dir).resolve()
+    else:
+        sample_tag = format_sample_tag(args.sample_rows, args.sample_fraction)
+        base = (DEFAULT_OUTPUT_ROOT / f"{args.source_file.stem}_{sample_tag}_seed{args.seed}").resolve()
+
+    num_shards = int(getattr(args, "num_shards", 1) or 1)
+    shard_index = int(getattr(args, "shard_index", 1) or 1)
+    if num_shards > 1:
+        return base / "shards" / shard_tag(num_shards, shard_index)
+    return base
 
 
 def validate_budget_guard(estimate_report: dict[str, Any], max_estimated_cost_usd: float | None) -> None:
@@ -1250,6 +1468,13 @@ def add_shared_arguments(parser: argparse.ArgumentParser) -> None:
     parser.add_argument("--seed", type=int, default=DEFAULT_SEED)
     parser.add_argument("--test-size", type=float, default=DEFAULT_TEST_SIZE)
     parser.add_argument("--val-size", type=float, default=DEFAULT_VAL_SIZE)
+    parser.add_argument("--num-shards", type=int, default=1, help="Split sampled source rows into this many shards.")
+    parser.add_argument(
+        "--shard-index",
+        type=int,
+        default=1,
+        help="One-based shard index for this process. Used with --num-shards.",
+    )
     parser.add_argument(
         "--model-pricing",
         action="append",
@@ -1289,6 +1514,23 @@ def add_export_hc3_arguments(parser: argparse.ArgumentParser) -> None:
     )
 
 
+def add_merge_shards_arguments(parser: argparse.ArgumentParser) -> None:
+    parser.add_argument(
+        "--shards-dir",
+        type=Path,
+        required=True,
+        help="Directory containing shard_*_of_* experiment directories.",
+    )
+    parser.add_argument(
+        "--output-dir",
+        type=Path,
+        required=True,
+        help="Destination experiment directory for the merged shard outputs.",
+    )
+    parser.add_argument("--source-file", type=Path, default=DEFAULT_SOURCE_FILE)
+    parser.add_argument("--overwrite", action="store_true")
+
+
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         description="Build recursive paraphrase HC3 dataset variants for the existing ZeroGPT Colab workflow.",
@@ -1311,21 +1553,33 @@ def build_parser() -> argparse.ArgumentParser:
         help="Convert generated answer-level datasets back to HC3 unified CSV format.",
     )
     add_export_hc3_arguments(export_parser)
+
+    merge_parser = subparsers.add_parser(
+        "merge-shards",
+        help="Merge completed shard experiment directories into one experiment directory.",
+    )
+    add_merge_shards_arguments(merge_parser)
     return parser
 
 
 def run_command(args: argparse.Namespace) -> dict[str, Any]:
+    validate_shard_args(args.num_shards, args.shard_index)
     generator_models = parse_generator_models(args.generator_model)
     depths = parse_depths(args.depths)
     pricing_overrides = parse_model_pricing(args.model_pricing)
     prompt_prefix = load_prompt_prefix()
 
     source_rows = load_source_rows(args.source_file)
-    sampled_source_rows = sample_source_rows(
+    pre_shard_source_rows = sample_source_rows(
         source_rows,
         sample_rows=args.sample_rows,
         sample_fraction=args.sample_fraction,
         seed=args.seed,
+    )
+    sampled_source_rows = shard_source_rows(
+        pre_shard_source_rows,
+        num_shards=args.num_shards,
+        shard_index=args.shard_index,
     )
     source_summary = summarize_source_rows(source_rows)
     sample_selection = build_sample_selection_summary(
@@ -1333,6 +1587,9 @@ def run_command(args: argparse.Namespace) -> dict[str, Any]:
         sample_fraction=args.sample_fraction,
         seed=args.seed,
         sampled_source_rows=sampled_source_rows,
+        pre_shard_source_rows=len(pre_shard_source_rows),
+        num_shards=args.num_shards,
+        shard_index=args.shard_index,
     )
 
     control_frame, control_summary = prepare_control_frame(
@@ -1457,17 +1714,23 @@ def run_command(args: argparse.Namespace) -> dict[str, Any]:
 
 
 def estimate_command(args: argparse.Namespace) -> dict[str, Any]:
+    validate_shard_args(args.num_shards, args.shard_index)
     generator_models = parse_generator_models(args.generator_model)
     depths = parse_depths(args.depths)
     pricing_overrides = parse_model_pricing(args.model_pricing)
     prompt_prefix = load_prompt_prefix()
 
     source_rows = load_source_rows(args.source_file)
-    sampled_source_rows = sample_source_rows(
+    pre_shard_source_rows = sample_source_rows(
         source_rows,
         sample_rows=args.sample_rows,
         sample_fraction=args.sample_fraction,
         seed=args.seed,
+    )
+    sampled_source_rows = shard_source_rows(
+        pre_shard_source_rows,
+        num_shards=args.num_shards,
+        shard_index=args.shard_index,
     )
     source_summary = summarize_source_rows(source_rows)
     sample_selection = build_sample_selection_summary(
@@ -1475,6 +1738,9 @@ def estimate_command(args: argparse.Namespace) -> dict[str, Any]:
         sample_fraction=args.sample_fraction,
         seed=args.seed,
         sampled_source_rows=sampled_source_rows,
+        pre_shard_source_rows=len(pre_shard_source_rows),
+        num_shards=args.num_shards,
+        shard_index=args.shard_index,
     )
     control_frame, control_summary = prepare_control_frame(
         sampled_source_rows,
@@ -1504,8 +1770,7 @@ def export_hc3_command(args: argparse.Namespace) -> dict[str, Any]:
     output_dir = ensure_dir(args.output_dir)
 
     source_rows, source_rows_file = load_export_source_rows(experiment_dir, args.source_file)
-    source_lookup = build_hc3_source_lookup(source_rows)
-    ai_sample_order = build_ai_sample_order(source_rows)
+    source_lookup = build_hc3_source_lookup_for_experiment(experiment_dir, source_rows)
 
     exported_datasets: list[dict[str, Any]] = []
     for model_slug, depth_name, dataset_dir in discover_generated_dataset_dirs(experiment_dir):
@@ -1514,7 +1779,6 @@ def export_hc3_command(args: argparse.Namespace) -> dict[str, Any]:
             dataset_dir,
             destination_dir,
             source_lookup=source_lookup,
-            ai_sample_order=ai_sample_order,
         )
         exported_datasets.append(
             {
@@ -1539,6 +1803,228 @@ def export_hc3_command(args: argparse.Namespace) -> dict[str, Any]:
     return {"output_dir": str(output_dir), "export_manifest": export_manifest}
 
 
+def discover_shard_experiment_dirs(shards_dir: Path) -> list[Path]:
+    if not shards_dir.exists():
+        raise FileNotFoundError(f"Shard directory does not exist: {shards_dir}")
+    shard_dirs = sorted(
+        child
+        for child in shards_dir.iterdir()
+        if child.is_dir() and child.name.startswith("shard_") and (child / "generation_manifest.json").exists()
+    )
+    if not shard_dirs:
+        raise FileNotFoundError(f"No completed shard experiment directories found under: {shards_dir}")
+    return shard_dirs
+
+
+def read_shard_manifests(shard_dirs: list[Path]) -> list[dict[str, Any]]:
+    manifests: list[dict[str, Any]] = []
+    for shard_dir in shard_dirs:
+        manifest_path = shard_dir / "generation_manifest.json"
+        payload = json.loads(manifest_path.read_text(encoding="utf-8"))
+        payload["_shard_dir"] = str(shard_dir)
+        manifests.append(payload)
+    return manifests
+
+
+def sort_hc3_source_frame(frame: pd.DataFrame) -> pd.DataFrame:
+    output = frame.copy()
+    if "hc3_row_id" in output.columns:
+        output["_numeric_hc3_row_id"] = pd.to_numeric(output["hc3_row_id"], errors="coerce").fillna(-1)
+        sort_columns = ["source", "_numeric_hc3_row_id", "question"]
+    else:
+        sort_columns = [column for column in ("source", "question") if column in output.columns]
+    if sort_columns:
+        output = output.sort_values(sort_columns).reset_index(drop=True)
+    if "_numeric_hc3_row_id" in output.columns:
+        output = output.drop(columns=["_numeric_hc3_row_id"])
+    return output
+
+
+def merge_sampled_source_rows(shard_dirs: list[Path], destination: Path) -> pd.DataFrame:
+    frames: list[pd.DataFrame] = []
+    for shard_dir in shard_dirs:
+        source_path = shard_dir / "sampled_source_rows.csv"
+        if not source_path.exists():
+            raise FileNotFoundError(f"Missing sampled source rows for shard: {source_path}")
+        frames.append(pd.read_csv(source_path))
+
+    merged = pd.concat(frames, ignore_index=True)
+    dedupe_columns = [column for column in ("hc3_row_id", "source", "question") if column in merged.columns]
+    if dedupe_columns:
+        merged = merged.drop_duplicates(subset=dedupe_columns, keep="first")
+    merged = sort_hc3_source_frame(merged)
+    merged.to_csv(destination, index=False)
+    return merged
+
+
+def merge_dataset_bundle_from_shards(
+    shard_dirs: list[Path],
+    *,
+    relative_dataset_dir: Path,
+    destination_dir: Path,
+    manifest: dict[str, Any],
+) -> pd.DataFrame:
+    frames: list[pd.DataFrame] = []
+    missing: list[str] = []
+    for shard_dir in shard_dirs:
+        source_path = shard_dir / relative_dataset_dir / "full.csv"
+        if source_path.exists():
+            frames.append(pd.read_csv(source_path))
+        else:
+            missing.append(str(source_path))
+    if missing:
+        raise FileNotFoundError("Missing shard dataset files:\n" + "\n".join(missing))
+    if not frames:
+        raise RuntimeError(f"No shard dataset frames found for {relative_dataset_dir}")
+
+    merged = pd.concat(frames, ignore_index=True)
+    if "sample_id" in merged.columns:
+        merged = merged.drop_duplicates(subset=["sample_id"], keep="first")
+    if {"split", "domain", "label", "sample_id"}.issubset(merged.columns):
+        merged = merged.sort_values(["split", "domain", "label", "sample_id"]).reset_index(drop=True)
+    else:
+        merged = merged.reset_index(drop=True)
+    manifest = dict(manifest)
+    manifest["num_samples"] = int(len(merged))
+    if "label" in merged.columns:
+        manifest["counts_by_label"] = merged["label"].value_counts().to_dict()
+    if "split" in merged.columns:
+        manifest["counts_by_split"] = merged["split"].value_counts().to_dict()
+    if "domain" in merged.columns:
+        manifest["counts_by_domain"] = merged["domain"].value_counts().to_dict()
+    write_dataset_bundle(destination_dir, merged, manifest)
+    return merged
+
+
+def discover_variant_relative_dirs(shard_dirs: list[Path]) -> list[Path]:
+    relative_dirs: set[Path] = set()
+    for shard_dir in shard_dirs:
+        datasets_dir = shard_dir / "datasets"
+        if not datasets_dir.exists():
+            continue
+        for model_dir in datasets_dir.iterdir():
+            if not model_dir.is_dir() or model_dir.name == "control":
+                continue
+            for depth_dir in model_dir.iterdir():
+                if depth_dir.is_dir() and (depth_dir / "full.csv").exists():
+                    relative_dirs.add(Path("datasets") / model_dir.name / depth_dir.name)
+    if not relative_dirs:
+        raise FileNotFoundError("No generated variant datasets were found in the shard directories.")
+    return sorted(relative_dirs, key=lambda path: str(path))
+
+
+def merge_shard_logs(shard_dirs: list[Path], output_dir: Path) -> dict[str, list[str]]:
+    merged_paths: dict[str, list[str]] = {"api_calls": [], "checkpoints": []}
+    for subdir_name in ("api_calls", "checkpoints"):
+        destination_subdir = ensure_dir(output_dir / subdir_name)
+        grouped: dict[str, list[Path]] = {}
+        for shard_dir in shard_dirs:
+            shard_subdir = shard_dir / subdir_name
+            if not shard_subdir.exists():
+                continue
+            for jsonl_path in shard_subdir.glob("*.jsonl"):
+                grouped.setdefault(jsonl_path.name, []).append(jsonl_path)
+
+        for filename, paths in sorted(grouped.items()):
+            destination = destination_subdir / filename
+            with destination.open("w", encoding="utf-8") as handle:
+                for path in sorted(paths):
+                    text = path.read_text(encoding="utf-8")
+                    if text:
+                        handle.write(text)
+                        if not text.endswith("\n"):
+                            handle.write("\n")
+            merged_paths[subdir_name].append(str(destination))
+    return merged_paths
+
+
+def merge_shards_command(args: argparse.Namespace) -> dict[str, Any]:
+    shard_dirs = discover_shard_experiment_dirs(Path(args.shards_dir))
+    output_dir = Path(args.output_dir)
+    if args.overwrite:
+        reset_dir(output_dir)
+    ensure_dir(output_dir)
+
+    shard_manifests = read_shard_manifests(shard_dirs)
+    sampled_source_frame = merge_sampled_source_rows(shard_dirs, output_dir / "sampled_source_rows.csv")
+    sampled_source_rows = load_source_rows(output_dir / "sampled_source_rows.csv")
+    source_rows = load_source_rows(args.source_file)
+    source_summary = summarize_source_rows(source_rows)
+    sample_selection = {
+        "selection_mode": "merged_shards",
+        "merged_shards": len(shard_dirs),
+        "sampled_source_rows": int(len(sampled_source_frame)),
+        "sampled_source_rows_by_domain": summarize_source_rows(sampled_source_rows)["domains"],
+        "shard_dirs": [str(path) for path in shard_dirs],
+    }
+
+    merged_logs = merge_shard_logs(shard_dirs, output_dir)
+
+    control_frame = merge_dataset_bundle_from_shards(
+        shard_dirs,
+        relative_dataset_dir=Path("datasets") / "control",
+        destination_dir=output_dir / "datasets" / "control",
+        manifest={
+            "created_at": utc_now_iso(),
+            "dataset_kind": "control",
+            "source_file": str(args.source_file),
+            "source_summary": source_summary,
+            "sample_selection": sample_selection,
+            "num_samples": None,
+            "merged_from_shards": [str(path) for path in shard_dirs],
+        },
+    )
+
+    variant_manifests: list[dict[str, Any]] = []
+    for relative_dir in discover_variant_relative_dirs(shard_dirs):
+        parts = relative_dir.parts
+        model_slug = parts[1]
+        depth_name = parts[2]
+        destination_dir = output_dir / relative_dir
+        variant_frame = merge_dataset_bundle_from_shards(
+            shard_dirs,
+            relative_dataset_dir=relative_dir,
+            destination_dir=destination_dir,
+            manifest={
+                "created_at": utc_now_iso(),
+                "dataset_kind": "paraphrased",
+                "source_file": str(args.source_file),
+                "source_summary": source_summary,
+                "sample_selection": sample_selection,
+                "num_samples": None,
+                "model_slug": model_slug,
+                "recursion_depth": depth_name.replace("depth_", ""),
+                "attack_name": PARAPHRASE_ATTACK_NAME,
+                "merged_from_shards": [str(path) for path in shard_dirs],
+            },
+        )
+        variant_manifests.append(
+            {
+                "model_slug": model_slug,
+                "recursion_depth": depth_name.replace("depth_", ""),
+                "dataset_dir": str(destination_dir),
+                "num_samples": int(len(variant_frame)),
+            }
+        )
+
+    generation_manifest = {
+        "created_at": utc_now_iso(),
+        "source_file": str(args.source_file),
+        "source_summary": source_summary,
+        "sample_selection": sample_selection,
+        "control_dataset_dir": str(output_dir / "datasets" / "control"),
+        "control_num_samples": int(len(control_frame)),
+        "prompt_prefix_file": DEFAULT_PROMPT_PREFIX_FILE.name,
+        "variants": variant_manifests,
+        "merged_shard_manifests": shard_manifests,
+        "merged_logs": merged_logs,
+        "pricing_verified_at": PRICING_VERIFIED_AT,
+        "pricing_source_url": PRICING_SOURCE_URL,
+    }
+    write_json(output_dir / "generation_manifest.json", generation_manifest)
+    return {"output_dir": str(output_dir), "generation_manifest": generation_manifest}
+
+
 def main() -> None:
     load_env_file(DEFAULT_ENV_FILE)
     parser = build_parser()
@@ -1549,6 +2035,8 @@ def main() -> None:
         args.output_dir = None if args.output_dir is None else Path(args.output_dir).resolve()
     if hasattr(args, "experiment_dir"):
         args.experiment_dir = Path(args.experiment_dir).resolve()
+    if hasattr(args, "shards_dir"):
+        args.shards_dir = Path(args.shards_dir).resolve()
 
     if args.command == "estimate":
         result = estimate_command(args)
@@ -1556,6 +2044,8 @@ def main() -> None:
         result = run_command(args)
     elif args.command == "export-hc3":
         result = export_hc3_command(args)
+    elif args.command == "merge-shards":
+        result = merge_shards_command(args)
     else:  # pragma: no cover - argparse keeps this unreachable.
         raise ValueError(f"Unsupported command: {args.command}")
 
