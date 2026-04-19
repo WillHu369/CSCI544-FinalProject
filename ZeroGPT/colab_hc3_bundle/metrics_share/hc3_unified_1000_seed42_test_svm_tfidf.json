@@ -1,0 +1,25 @@
+{
+  "additional_details": {
+    "additional_models_used": [],
+    "notes": "Exported from ZeroGPT Colab evaluation on test_dataset."
+  },
+  "dataset_used": "hc3_unified_1000_seed42_test.csv",
+  "detection_method": "svm_tfidf",
+  "experiment_name": "hc3_unified_1000_seed42_test_svm_tfidf",
+  "metrics_at_0.01pct_fpr": {
+    "accuracy": 0.9240014139271828,
+    "auc_roc": 0.9975077476756972,
+    "f1": 0.9186530457813092,
+    "precision": 1.0,
+    "recall": 0.8495451364590623
+  },
+  "metrics_at_1pct_fpr": {
+    "accuracy": 0.9664192294096854,
+    "auc_roc": 0.9975077476756972,
+    "f1": 0.965962020781082,
+    "precision": 0.9897209985315712,
+    "recall": 0.9433170048985304
+  },
+  "model_used": "linear_svm_tfidf",
+  "num_samples": 2829
+}

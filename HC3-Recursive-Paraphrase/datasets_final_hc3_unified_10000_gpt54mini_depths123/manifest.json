@@ -1,0 +1,73 @@
+{
+  "columns": [
+    "hc3_row_id",
+    "source",
+    "question",
+    "human_answers",
+    "chatgpt_answers"
+  ],
+  "created_at": "2026-04-19T19:31:30Z",
+  "datasets": [
+    {
+      "depth": "depth_1",
+      "destination_dir": "C:\\Users\\adish\\My_Stuff\\Acads_USC\\Semester 2\\CSCI544\\Project_Git\\CSCI544-FinalProject\\HC3-Recursive-Paraphrase\\datasets_final_hc3_unified_10000_gpt54mini_depths123\\gpt_5_4_mini\\depth_1",
+      "files": {
+        "full.csv": {
+          "columns": [
+            "hc3_row_id",
+            "source",
+            "question",
+            "human_answers",
+            "chatgpt_answers"
+          ],
+          "path": "C:\\Users\\adish\\My_Stuff\\Acads_USC\\Semester 2\\CSCI544\\Project_Git\\CSCI544-FinalProject\\HC3-Recursive-Paraphrase\\datasets_final_hc3_unified_10000_gpt54mini_depths123\\gpt_5_4_mini\\depth_1\\full.csv",
+          "rows": 10000
+        }
+      },
+      "model": "gpt_5_4_mini",
+      "source_dataset_dir": "C:\\Users\\adish\\My_Stuff\\Acads_USC\\Semester 2\\CSCI544\\Project_Git\\CSCI544-FinalProject\\HC3-Recursive-Paraphrase\\artifacts\\experiments\\hc3_unified_10000_gpt54mini_depths123_merged\\datasets\\gpt_5_4_mini\\depth_1"
+    },
+    {
+      "depth": "depth_2",
+      "destination_dir": "C:\\Users\\adish\\My_Stuff\\Acads_USC\\Semester 2\\CSCI544\\Project_Git\\CSCI544-FinalProject\\HC3-Recursive-Paraphrase\\datasets_final_hc3_unified_10000_gpt54mini_depths123\\gpt_5_4_mini\\depth_2",
+      "files": {
+        "full.csv": {
+          "columns": [
+            "hc3_row_id",
+            "source",
+            "question",
+            "human_answers",
+            "chatgpt_answers"
+          ],
+          "path": "C:\\Users\\adish\\My_Stuff\\Acads_USC\\Semester 2\\CSCI544\\Project_Git\\CSCI544-FinalProject\\HC3-Recursive-Paraphrase\\datasets_final_hc3_unified_10000_gpt54mini_depths123\\gpt_5_4_mini\\depth_2\\full.csv",
+          "rows": 10000
+        }
+      },
+      "model": "gpt_5_4_mini",
+      "source_dataset_dir": "C:\\Users\\adish\\My_Stuff\\Acads_USC\\Semester 2\\CSCI544\\Project_Git\\CSCI544-FinalProject\\HC3-Recursive-Paraphrase\\artifacts\\experiments\\hc3_unified_10000_gpt54mini_depths123_merged\\datasets\\gpt_5_4_mini\\depth_2"
+    },
+    {
+      "depth": "depth_3",
+      "destination_dir": "C:\\Users\\adish\\My_Stuff\\Acads_USC\\Semester 2\\CSCI544\\Project_Git\\CSCI544-FinalProject\\HC3-Recursive-Paraphrase\\datasets_final_hc3_unified_10000_gpt54mini_depths123\\gpt_5_4_mini\\depth_3",
+      "files": {
+        "full.csv": {
+          "columns": [
+            "hc3_row_id",
+            "source",
+            "question",
+            "human_answers",
+            "chatgpt_answers"
+          ],
+          "path": "C:\\Users\\adish\\My_Stuff\\Acads_USC\\Semester 2\\CSCI544\\Project_Git\\CSCI544-FinalProject\\HC3-Recursive-Paraphrase\\datasets_final_hc3_unified_10000_gpt54mini_depths123\\gpt_5_4_mini\\depth_3\\full.csv",
+          "rows": 10000
+        }
+      },
+      "model": "gpt_5_4_mini",
+      "source_dataset_dir": "C:\\Users\\adish\\My_Stuff\\Acads_USC\\Semester 2\\CSCI544\\Project_Git\\CSCI544-FinalProject\\HC3-Recursive-Paraphrase\\artifacts\\experiments\\hc3_unified_10000_gpt54mini_depths123_merged\\datasets\\gpt_5_4_mini\\depth_3"
+    }
+  ],
+  "experiment_dir": "C:\\Users\\adish\\My_Stuff\\Acads_USC\\Semester 2\\CSCI544\\Project_Git\\CSCI544-FinalProject\\HC3-Recursive-Paraphrase\\artifacts\\experiments\\hc3_unified_10000_gpt54mini_depths123_merged",
+  "format": "hc3_unified",
+  "output_dir": "C:\\Users\\adish\\My_Stuff\\Acads_USC\\Semester 2\\CSCI544\\Project_Git\\CSCI544-FinalProject\\HC3-Recursive-Paraphrase\\datasets_final_hc3_unified_10000_gpt54mini_depths123",
+  "source_rows_file": "C:\\Users\\adish\\My_Stuff\\Acads_USC\\Semester 2\\CSCI544\\Project_Git\\CSCI544-FinalProject\\HC3-Recursive-Paraphrase\\artifacts\\experiments\\hc3_unified_10000_gpt54mini_depths123_merged\\sampled_source_rows.csv"
+}

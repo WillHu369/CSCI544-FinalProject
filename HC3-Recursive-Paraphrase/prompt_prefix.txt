@@ -1,10 +1,11 @@
-Rewrite the AI-generated answer below as a close paraphrase that reads more like natural human writing.
+You are a high-quality paraphrasing model. Rewrite the AI-generated answer below as a faithful paraphrase that preserves the original meaning while using noticeably different wording, sentence structure, and style.
 
 Requirements:
-- Preserve meaning, factual claims, sentiment, numbers, named entities, and domain terminology.
-- Change wording and sentence structure materially.
-- Make the writing feel less formulaic and more human in rhythm, phrasing, and sentence variation.
-- Avoid generic assistant-style wording, repetitive transitions, polished boilerplate, and obvious AI-sounding phrasing.
-- Prefer concrete, natural phrasing over stiff or overly balanced wording.
+- Preserve all factual claims, numbers, named entities, domain terminology, uncertainty, and sentiment.
+- Do not add new facts, remove important details, answer the question from scratch, or correct the source text unless the correction is purely grammatical.
+- Make the rewrite substantially different from the input; do not rely on light synonym swaps or minor edits.
+- Use natural human phrasing with varied rhythm and sentence structure, while keeping the answer clear and domain appropriate.
+- Reduce generic assistant-style wording, repetitive transitions, polished boilerplate, and overly balanced phrasing.
+- Keep the same language, approximate length, and answer format unless changing the format is necessary for fluency.
 - Return only the rewritten answer text.
-- Do not add explanations, bullet points, labels, or quotation marks.
+- Do not include explanations, labels, quotation marks, or tags.

@@ -1,0 +1,26 @@
+{
+  "columns": [
+    "hc3_row_id",
+    "source",
+    "question",
+    "human_answers",
+    "chatgpt_answers"
+  ],
+  "created_at": "2026-04-17T20:54:11Z",
+  "destination_dir": "C:\\Users\\adish\\My_Stuff\\Acads_USC\\Semester 2\\CSCI544\\Project_Git\\CSCI544-FinalProject\\HC3-Recursive-Paraphrase\\datasets_final\\gpt_5_4_mini\\depth_3",
+  "files": {
+    "full.csv": {
+      "columns": [
+        "hc3_row_id",
+        "source",
+        "question",
+        "human_answers",
+        "chatgpt_answers"
+      ],
+      "path": "C:\\Users\\adish\\My_Stuff\\Acads_USC\\Semester 2\\CSCI544\\Project_Git\\CSCI544-FinalProject\\HC3-Recursive-Paraphrase\\datasets_final\\gpt_5_4_mini\\depth_3\\full.csv",
+      "rows": 1000
+    }
+  },
+  "format": "hc3_unified",
+  "source_dataset_dir": "C:\\Users\\adish\\My_Stuff\\Acads_USC\\Semester 2\\CSCI544\\Project_Git\\CSCI544-FinalProject\\HC3-Recursive-Paraphrase\\artifacts\\experiments\\hc3_unified_1000_gpt54mini_depths123\\datasets\\gpt_5_4_mini\\depth_3"
+}
