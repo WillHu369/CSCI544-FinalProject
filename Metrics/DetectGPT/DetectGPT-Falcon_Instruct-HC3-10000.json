@@ -1,0 +1,27 @@
+{
+  "experiment_name": "perturbation_5_z_results.json",
+  "detection_method": "DetectGPT",
+  "model_used": "tiiuae/falcon-7b-instruct",
+  "dataset_used": "hc3_all",
+  "num_samples": 3728,
+  "additional_details": {
+    "additional_models_used": [
+      "t5-base"
+    ],
+    "notes": ""
+  },
+  "metrics_at_1pct_fpr": {
+    "f1": 0.0467047223663726,
+    "accuracy": 0.5072424892703863,
+    "precision": 0.7142857142857143,
+    "recall": 0.024141630901287552,
+    "auc_roc": 0.7285865345650131
+  },
+  "metrics_at_0.1pct_fpr": {
+    "f1": 0.0010723860589812334,
+    "accuracy": 0.5002682403433476,
+    "precision": 1.0,
+    "recall": 0.000536480686695279,
+    "auc_roc": 0.7285865345650131
+  }
+}
