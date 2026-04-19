@@ -1,0 +1,25 @@
+{
+  "additional_details": {
+    "additional_models_used": [],
+    "notes": "Exported from ZeroGPT Colab evaluation on test_dataset."
+  },
+  "dataset_used": "hc3_gpt_5_4_mini_recursive_paraphrase_depth_1_test.csv",
+  "detection_method": "xgboost_tfidf",
+  "experiment_name": "hc3_gpt_5_4_mini_recursive_paraphrase_depth_1_test_xgboost_tfidf",
+  "metrics_at_0.01pct_fpr": {
+    "accuracy": 0.6460396039603961,
+    "auc_roc": 0.9781427571028412,
+    "f1": 0.460377358490566,
+    "precision": 1.0,
+    "recall": 0.2990196078431372
+  },
+  "metrics_at_1pct_fpr": {
+    "accuracy": 0.830975954738331,
+    "auc_roc": 0.9781427571028412,
+    "f1": 0.801330008312552,
+    "precision": 0.985685071574642,
+    "recall": 0.6750700280112045
+  },
+  "model_used": "xgboost_tfidf",
+  "num_samples": 2828
+}

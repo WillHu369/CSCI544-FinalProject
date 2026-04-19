@@ -43,6 +43,7 @@ DEFAULT_SOURCE_FILE = PROJECT_ROOT / "HC3-Dataset-Samples" / "hc3_unified_1000_s
 DEFAULT_OUTPUT_ROOT = SCRIPT_DIR / "artifacts" / "experiments"
 DEFAULT_ENV_FILE = SCRIPT_DIR / ".env"
 DEFAULT_PROMPT_PREFIX_FILE = SCRIPT_DIR / "prompt_prefix.txt"
+DEFAULT_FINAL_DATASETS_DIR = SCRIPT_DIR / "datasets_final"
 
 DEFAULT_MODEL = "gpt-5.4-mini"
 DEFAULT_DEPTHS = (1, 2, 3)
@@ -58,17 +59,21 @@ PRICING_SOURCE_URL = "https://openai.com/api/pricing/"
 
 PARAPHRASE_ATTACK_NAME = "openai_recursive_paraphrase"
 PARAPHRASE_VARIANT_PREFIX = "recursive_paraphrase_depth_"
+HC3_UNIFIED_COLUMNS = ("hc3_row_id", "source", "question", "human_answers", "chatgpt_answers")
+HC3_FINAL_EXPORT_FILES = ("full.csv",)
+HC3_STALE_SPLIT_EXPORT_FILES = ("train.csv", "val.csv", "test.csv")
 DEFAULT_PROMPT_PREFIX = """
-Rewrite the AI-generated answer below as a close paraphrase that reads more like natural human writing.
+You are a high-quality paraphrasing model. Rewrite the AI-generated answer below as a faithful paraphrase that preserves the original meaning while using noticeably different wording, sentence structure, and style.
 
 Requirements:
-- Preserve meaning, factual claims, sentiment, numbers, named entities, and domain terminology.
-- Change wording and sentence structure materially.
-- Make the writing feel less formulaic and more human in rhythm, phrasing, and sentence variation.
-- Avoid generic assistant-style wording, repetitive transitions, polished boilerplate, and obvious AI-sounding phrasing.
-- Prefer concrete, natural phrasing over stiff or overly balanced wording.
+- Preserve all factual claims, numbers, named entities, domain terminology, uncertainty, and sentiment.
+- Do not add new facts, remove important details, answer the question from scratch, or correct the source text unless the correction is purely grammatical.
+- Make the rewrite substantially different from the input; do not rely on light synonym swaps or minor edits.
+- Use natural human phrasing with varied rhythm and sentence structure, while keeping the answer clear and domain appropriate.
+- Reduce generic assistant-style wording, repetitive transitions, polished boilerplate, and overly balanced phrasing.
+- Keep the same language, approximate length, and answer format unless changing the format is necessary for fluency.
 - Return only the rewritten answer text.
-- Do not add explanations, bullet points, labels, or quotation marks.
+- Do not include explanations, labels, quotation marks, or tags.
 """.strip()
 
 
@@ -611,6 +616,176 @@ def write_dataset_bundle(dataset_dir: Path, frame: pd.DataFrame, manifest: dict[
     write_json(dataset_dir / "manifest.json", manifest)
 
 
+def clean_scalar(value: Any) -> str:
+    if value is None:
+        return ""
+    try:
+        if pd.isna(value):
+            return ""
+    except (TypeError, ValueError):
+        pass
+    return str(value)
+
+
+def normalize_group_value(value: Any) -> str:
+    return " ".join(clean_scalar(value).split())
+
+
+def hc3_row_key(source: Any, question: Any) -> tuple[str, str]:
+    return (normalize_group_value(source), normalize_group_value(question))
+
+
+def load_export_source_rows(experiment_dir: Path, source_file: Path) -> tuple[list[dict[str, Any]], Path]:
+    sampled_source_file = experiment_dir / "sampled_source_rows.csv"
+    selected_source_file = sampled_source_file if sampled_source_file.exists() else source_file
+    return load_source_rows(selected_source_file), selected_source_file
+
+
+def build_hc3_source_lookup(source_rows: list[dict[str, Any]]) -> dict[tuple[str, str], dict[str, Any]]:
+    lookup: dict[tuple[str, str], dict[str, Any]] = {}
+    duplicate_keys: list[tuple[str, str]] = []
+    for row_index, row in enumerate(source_rows):
+        key = hc3_row_key(row.get("source"), row.get("question"))
+        if key in lookup:
+            duplicate_keys.append(key)
+            continue
+        lookup[key] = {
+            "order": row_index,
+            "hc3_row_id": clean_scalar(row.get("hc3_row_id")),
+            "source": clean_scalar(row.get("source")),
+            "question": clean_scalar(row.get("question")),
+            "human_answers": decode_list_cell(row.get("human_answers")),
+        }
+
+    if duplicate_keys:
+        preview = ", ".join(f"{source}: {question[:60]}" for source, question in duplicate_keys[:5])
+        raise ValueError(f"Cannot export HC3 format because source rows contain duplicate questions: {preview}")
+    return lookup
+
+
+def build_ai_sample_order(source_rows: list[dict[str, Any]]) -> dict[str, int]:
+    helpers = get_hc3_helpers()
+    normalized = helpers.normalize_hc3_rows(source_rows, dataset_name="hc3")
+    deduplicated, _ = helpers.deduplicate_samples(normalized)
+    ai_rows = deduplicated.loc[deduplicated["label"].astype(str) == "ai"].reset_index(drop=True)
+    return {str(row["sample_id"]): int(index) for index, row in ai_rows.iterrows()}
+
+
+def discover_generated_dataset_dirs(experiment_dir: Path) -> list[tuple[str, str, Path]]:
+    datasets_root = experiment_dir / "datasets"
+    if not datasets_root.exists():
+        raise FileNotFoundError(f"Generated datasets directory was not found: {datasets_root}")
+
+    discovered: list[tuple[str, str, Path]] = []
+    for model_dir in sorted(child for child in datasets_root.iterdir() if child.is_dir()):
+        if model_dir.name == "control":
+            continue
+        for depth_dir in sorted(child for child in model_dir.iterdir() if child.is_dir()):
+            if (depth_dir / "full.csv").exists():
+                discovered.append((model_dir.name, depth_dir.name, depth_dir))
+
+    if not discovered:
+        raise FileNotFoundError(f"No generated model depth datasets were found under: {datasets_root}")
+    return discovered
+
+
+def convert_detector_frame_to_hc3(
+    frame: pd.DataFrame,
+    *,
+    source_lookup: dict[tuple[str, str], dict[str, Any]],
+    ai_sample_order: dict[str, int],
+) -> pd.DataFrame:
+    required_columns = {"domain", "prompt", "text", "label", "sample_id"}
+    missing = sorted(required_columns.difference(frame.columns))
+    if missing:
+        raise ValueError(f"Generated dataset is missing required columns: {', '.join(missing)}")
+
+    grouped_ai_answers: dict[tuple[str, str], list[tuple[int, str]]] = {}
+    row_keys: set[tuple[str, str]] = set()
+    missing_source_keys: list[tuple[str, str]] = []
+
+    for row_position, row in enumerate(frame.to_dict(orient="records")):
+        key = hc3_row_key(row.get("domain"), row.get("prompt"))
+        row_keys.add(key)
+        if key not in source_lookup:
+            missing_source_keys.append(key)
+            continue
+
+        if clean_scalar(row.get("label")).lower() != "ai":
+            continue
+
+        parent_sample_id = clean_scalar(row.get("parent_sample_id"))
+        source_sample_id = parent_sample_id or clean_scalar(row.get("sample_id"))
+        answer_order = ai_sample_order.get(source_sample_id, len(ai_sample_order) + row_position)
+        text = clean_scalar(row.get("text")).strip()
+        if text:
+            grouped_ai_answers.setdefault(key, []).append((answer_order, text))
+
+    if missing_source_keys:
+        preview = ", ".join(f"{source}: {question[:60]}" for source, question in missing_source_keys[:5])
+        raise ValueError(f"Generated rows could not be matched to source HC3 questions: {preview}")
+
+    records: list[dict[str, Any]] = []
+    for key in sorted(row_keys, key=lambda item: source_lookup[item]["order"]):
+        source_payload = source_lookup[key]
+        ai_answers = [text for _, text in sorted(grouped_ai_answers.get(key, []), key=lambda item: item[0])]
+        records.append(
+            {
+                "hc3_row_id": source_payload["hc3_row_id"],
+                "source": source_payload["source"],
+                "question": source_payload["question"],
+                "human_answers": encode_list_cell(source_payload["human_answers"]),
+                "chatgpt_answers": encode_list_cell(ai_answers),
+            }
+        )
+
+    return pd.DataFrame.from_records(records, columns=list(HC3_UNIFIED_COLUMNS))
+
+
+def export_dataset_dir_to_hc3(
+    source_dataset_dir: Path,
+    destination_dir: Path,
+    *,
+    source_lookup: dict[tuple[str, str], dict[str, Any]],
+    ai_sample_order: dict[str, int],
+) -> dict[str, Any]:
+    ensure_dir(destination_dir)
+    for stale_filename in HC3_STALE_SPLIT_EXPORT_FILES:
+        stale_file = destination_dir / stale_filename
+        if stale_file.exists():
+            stale_file.unlink()
+
+    exported_files: dict[str, dict[str, Any]] = {}
+    for filename in HC3_FINAL_EXPORT_FILES:
+        source_file = source_dataset_dir / filename
+        if not source_file.exists():
+            continue
+        frame = pd.read_csv(source_file)
+        converted = convert_detector_frame_to_hc3(
+            frame,
+            source_lookup=source_lookup,
+            ai_sample_order=ai_sample_order,
+        )
+        destination_file = destination_dir / filename
+        converted.to_csv(destination_file, index=False)
+        exported_files[filename] = {
+            "path": str(destination_file),
+            "rows": int(len(converted)),
+            "columns": list(converted.columns),
+        }
+
+    manifest = {
+        "created_at": utc_now_iso(),
+        "source_dataset_dir": str(source_dataset_dir),
+        "destination_dir": str(destination_dir),
+        "files": exported_files,
+        "format": "hc3_unified",
+        "columns": list(HC3_UNIFIED_COLUMNS),
+    }
+    write_json(destination_dir / "manifest.json", manifest)
+    return manifest
+
+
 def estimate_tokens(text: str) -> int:
     stripped = str(text or "").strip()
     if not stripped:
@@ -766,6 +941,33 @@ def load_paraphrase_checkpoint(checkpoint_path: Path) -> dict[str, ParaphraseRec
     return records
 
 
+def completed_consecutive_depth(record: ParaphraseRecord) -> int:
+    completed_depth = 0
+    while completed_depth + 1 in record.depth_outputs:
+        completed_depth += 1
+    return completed_depth
+
+
+def format_progress_bar(completed: int, total: int, *, width: int = 28) -> str:
+    if total <= 0:
+        return "[" + "=" * width + "]"
+    filled = min(width, int(round(width * completed / total)))
+    return "[" + "=" * filled + "-" * (width - filled) + "]"
+
+
+def print_call_progress(*, completed: int, total: int, model: str, force: bool = False) -> None:
+    if total <= 0:
+        if force:
+            print(f"[paraphrase:{model}] no API calls left; checkpoint is already complete")
+        return
+    if not force and completed % 10 != 0:
+        return
+    remaining = max(total - completed, 0)
+    percent = 100.0 * completed / total
+    bar = format_progress_bar(completed, total)
+    print(f"[paraphrase:{model}] {bar} {completed}/{total} calls | {remaining} left | {percent:.1f}%")
+
+
 class RecursiveParaphraser:
     def __init__(
         self,
@@ -831,14 +1033,24 @@ class RecursiveParaphraser:
         requested_depths = sorted(depths)
         max_depth = max(requested_depths)
         checkpoint = load_paraphrase_checkpoint(checkpoint_path)
+        rows = list(ai_rows.itertuples(index=False))
 
-        for row in ai_rows.itertuples(index=False):
+        total_pending_calls = 0
+        for row in rows:
+            sample_id = str(row.sample_id)
+            record = checkpoint.get(sample_id, ParaphraseRecord(sample_id=sample_id))
+            if all(depth in record.depth_outputs for depth in requested_depths):
+                continue
+            total_pending_calls += max(0, max_depth - completed_consecutive_depth(record))
+
+        completed_calls = 0
+        print_call_progress(completed=completed_calls, total=total_pending_calls, model=self.model, force=True)
+
+        for row in rows:
             sample_id = str(row.sample_id)
             record = checkpoint.get(sample_id, ParaphraseRecord(sample_id=sample_id))
 
-            completed_depth = 0
-            while completed_depth + 1 in record.depth_outputs:
-                completed_depth += 1
+            completed_depth = completed_consecutive_depth(record)
             if all(depth in record.depth_outputs for depth in requested_depths):
                 continue
 
@@ -883,12 +1095,16 @@ class RecursiveParaphraser:
                 )
 
                 current_text = output_text
+                completed_calls += 1
+                print_call_progress(completed=completed_calls, total=total_pending_calls, model=self.model)
                 if self.request_delay_seconds > 0:
                     time.sleep(self.request_delay_seconds)
 
             append_jsonl(checkpoint_path, record.to_dict())
             checkpoint[sample_id] = record
 
+        if total_pending_calls and (completed_calls == 0 or completed_calls % 10 != 0):
+            print_call_progress(completed=completed_calls, total=total_pending_calls, model=self.model, force=True)
         return checkpoint
 
 
@@ -1052,6 +1268,27 @@ def add_run_arguments(parser: argparse.ArgumentParser) -> None:
     parser.add_argument("--temperature", type=float, default=DEFAULT_TEMPERATURE)
 
 
+def add_export_hc3_arguments(parser: argparse.ArgumentParser) -> None:
+    parser.add_argument(
+        "--experiment-dir",
+        type=Path,
+        required=True,
+        help="Experiment directory containing the generated datasets folder.",
+    )
+    parser.add_argument(
+        "--source-file",
+        type=Path,
+        default=DEFAULT_SOURCE_FILE,
+        help="Fallback HC3 unified source CSV. sampled_source_rows.csv in the experiment is used when present.",
+    )
+    parser.add_argument(
+        "--output-dir",
+        type=Path,
+        default=DEFAULT_FINAL_DATASETS_DIR,
+        help="Destination directory for HC3 unified exports.",
+    )
+
+
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         description="Build recursive paraphrase HC3 dataset variants for the existing ZeroGPT Colab workflow.",
@@ -1068,6 +1305,12 @@ def build_parser() -> argparse.ArgumentParser:
     )
     add_shared_arguments(run_parser)
     add_run_arguments(run_parser)
+
+    export_parser = subparsers.add_parser(
+        "export-hc3",
+        help="Convert generated answer-level datasets back to HC3 unified CSV format.",
+    )
+    add_export_hc3_arguments(export_parser)
     return parser
 
 
@@ -1256,17 +1499,63 @@ def estimate_command(args: argparse.Namespace) -> dict[str, Any]:
     return {"output_dir": str(output_dir), "estimate": report}
 
 
+def export_hc3_command(args: argparse.Namespace) -> dict[str, Any]:
+    experiment_dir = Path(args.experiment_dir)
+    output_dir = ensure_dir(args.output_dir)
+
+    source_rows, source_rows_file = load_export_source_rows(experiment_dir, args.source_file)
+    source_lookup = build_hc3_source_lookup(source_rows)
+    ai_sample_order = build_ai_sample_order(source_rows)
+
+    exported_datasets: list[dict[str, Any]] = []
+    for model_slug, depth_name, dataset_dir in discover_generated_dataset_dirs(experiment_dir):
+        destination_dir = output_dir / model_slug / depth_name
+        manifest = export_dataset_dir_to_hc3(
+            dataset_dir,
+            destination_dir,
+            source_lookup=source_lookup,
+            ai_sample_order=ai_sample_order,
+        )
+        exported_datasets.append(
+            {
+                "model": model_slug,
+                "depth": depth_name,
+                "source_dataset_dir": str(dataset_dir),
+                "destination_dir": str(destination_dir),
+                "files": manifest["files"],
+            }
+        )
+
+    export_manifest = {
+        "created_at": utc_now_iso(),
+        "experiment_dir": str(experiment_dir),
+        "source_rows_file": str(source_rows_file),
+        "output_dir": str(output_dir),
+        "format": "hc3_unified",
+        "columns": list(HC3_UNIFIED_COLUMNS),
+        "datasets": exported_datasets,
+    }
+    write_json(output_dir / "manifest.json", export_manifest)
+    return {"output_dir": str(output_dir), "export_manifest": export_manifest}
+
+
 def main() -> None:
     load_env_file(DEFAULT_ENV_FILE)
     parser = build_parser()
     args = parser.parse_args()
-    args.source_file = Path(args.source_file).resolve()
-    args.output_dir = None if args.output_dir is None else Path(args.output_dir).resolve()
+    if hasattr(args, "source_file"):
+        args.source_file = Path(args.source_file).resolve()
+    if hasattr(args, "output_dir"):
+        args.output_dir = None if args.output_dir is None else Path(args.output_dir).resolve()
+    if hasattr(args, "experiment_dir"):
+        args.experiment_dir = Path(args.experiment_dir).resolve()
 
     if args.command == "estimate":
         result = estimate_command(args)
     elif args.command == "run":
         result = run_command(args)
+    elif args.command == "export-hc3":
+        result = export_hc3_command(args)
     else:  # pragma: no cover - argparse keeps this unreachable.
         raise ValueError(f"Unsupported command: {args.command}")
 
