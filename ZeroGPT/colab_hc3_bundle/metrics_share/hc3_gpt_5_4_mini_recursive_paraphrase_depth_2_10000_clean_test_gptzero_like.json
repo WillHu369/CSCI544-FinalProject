@@ -1,0 +1,27 @@
+{
+  "additional_details": {
+    "additional_models_used": [
+      "/content/drive/MyDrive/colab_hc3_bundle/hf_models/gpt2"
+    ],
+    "notes": "Exported from ZeroGPT Colab evaluation on test_dataset."
+  },
+  "dataset_used": "hc3_gpt_5_4_mini_recursive_paraphrase_depth_2_10000_clean_test.csv",
+  "detection_method": "gptzero_like",
+  "experiment_name": "hc3_gpt_5_4_mini_recursive_paraphrase_depth_2_10000_clean_test_gptzero_like",
+  "metrics_at_0.01pct_fpr": {
+    "accuracy": 0.6656858237547892,
+    "auc_roc": 0.933729230830273,
+    "f1": 0.0009160025648071,
+    "precision": 0.7142857142857143,
+    "recall": 0.0004582951420714
+  },
+  "metrics_at_1pct_fpr": {
+    "accuracy": 0.7293793103448276,
+    "auc_roc": 0.933729230830273,
+    "f1": 0.3421503613739661,
+    "precision": 0.9143767423337316,
+    "recall": 0.21044912923923
+  },
+  "model_used": "gptzero_like_logistic_regression",
+  "num_samples": 32625
+}
