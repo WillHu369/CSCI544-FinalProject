@@ -20,7 +20,7 @@ from gpt_zero.gptzero_like import (
 )
 from gpt_zero.hc3 import PrepareHC3Config, deduplicate_samples, normalize_hc3_rows, prepare_hc3_dataset
 from gpt_zero.io_utils import dump_json, ensure_dir, read_table, reset_dir, timestamp_run_id, write_table
-from gpt_zero.metrics import evaluate_predictions, fixed_fpr_metric_name
+from gpt_zero.metrics import evaluate_predictions, fixed_fpr_metric_name, target_fpr_metric_name
 from gpt_zero.schemas import ensure_sample_schema
 from gpt_zero.tfidf import TfidfFeatureConfig
 
@@ -46,6 +46,8 @@ SHARED_METRIC_TARGETS = (
     (0.001, "metrics_at_0.1pct_fpr"),
     (0.0001, "metrics_at_0.01pct_fpr"),
 )
+SHARED_PRESENTATION_TARGET_FPR = 0.001
+SHARED_PRESENTATION_TARGET_TPR = 0.80
 
 
 def _normalize_score_splits(values: list[str] | tuple[str, ...] | None) -> list[str]:
@@ -320,6 +322,14 @@ def _finite_float(value: object, default: float = 0.0) -> float:
     return numeric if math.isfinite(numeric) else default
 
 
+def _finite_float_or_none(value: object) -> float | None:
+    try:
+        numeric = float(value)
+    except (TypeError, ValueError):
+        return None
+    return numeric if math.isfinite(numeric) else None
+
+
 def _shared_model_metadata(detector_name: str, config: ColabExperimentConfig | None) -> tuple[str, list[str]]:
     if detector_name == "gptzero_like":
         additional_models = [str(config.lm_model)] if config is not None else []
@@ -331,13 +341,107 @@ def _shared_model_metadata(detector_name: str, config: ColabExperimentConfig | N
     return detector_name, []
 
 
-def _shared_metrics_block(row: pd.Series, target_fpr: float) -> dict[str, float]:
+def _shared_operating_point_from_roc(roc_group: pd.DataFrame | None, target_fpr: float) -> pd.Series | None:
+    if roc_group is None or roc_group.empty:
+        return None
+    valid = roc_group.loc[pd.to_numeric(roc_group["fpr"], errors="coerce") <= target_fpr].copy()
+    if valid.empty:
+        return None
+    valid["tpr"] = pd.to_numeric(valid["tpr"], errors="coerce")
+    valid["fpr"] = pd.to_numeric(valid["fpr"], errors="coerce")
+    valid = valid.dropna(subset=["fpr", "tpr"])
+    if valid.empty:
+        return None
+    best_tpr = valid["tpr"].max()
+    return valid.loc[valid["tpr"].sub(best_tpr).abs() <= 1e-12].sort_values("fpr").iloc[-1]
+
+
+def _shared_fixed_fpr_values_from_roc(
+    row: pd.Series,
+    roc_group: pd.DataFrame | None,
+    target_fpr: float,
+) -> dict[str, float]:
+    operating_point = _shared_operating_point_from_roc(roc_group, target_fpr)
+    if operating_point is None:
+        return {}
+
+    positives = _finite_float(row.get("fn")) + _finite_float(row.get("tp"))
+    negatives = _finite_float(row.get("tn")) + _finite_float(row.get("fp"))
+    if positives <= 0 or negatives < 0:
+        return {}
+
+    actual_tpr = _finite_float(operating_point.get("tpr"))
+    actual_fpr = _finite_float(operating_point.get("fpr"))
+    tp = actual_tpr * positives
+    fp = actual_fpr * negatives
+    fn = positives - tp
+    tn = negatives - fp
+    precision = tp / (tp + fp) if (tp + fp) > 0 else 0.0
+    recall = tp / positives if positives > 0 else 0.0
+    f1 = 2 * precision * recall / (precision + recall) if (precision + recall) > 0 else 0.0
+    accuracy = (tp + tn) / (positives + negatives) if (positives + negatives) > 0 else 0.0
+
     return {
-        "f1": _finite_float(row.get(fixed_fpr_metric_name("f1", target_fpr))),
-        "accuracy": _finite_float(row.get(fixed_fpr_metric_name("accuracy", target_fpr))),
-        "precision": _finite_float(row.get(fixed_fpr_metric_name("precision", target_fpr))),
-        "recall": _finite_float(row.get(fixed_fpr_metric_name("recall", target_fpr))),
+        fixed_fpr_metric_name("threshold", target_fpr): _finite_float(operating_point.get("threshold")),
+        fixed_fpr_metric_name("actual_fpr", target_fpr): actual_fpr,
+        target_fpr_metric_name(target_fpr): recall,
+        fixed_fpr_metric_name("accuracy", target_fpr): accuracy,
+        fixed_fpr_metric_name("precision", target_fpr): precision,
+        fixed_fpr_metric_name("recall", target_fpr): recall,
+        fixed_fpr_metric_name("f1", target_fpr): f1,
+    }
+
+
+def _shared_metric_value(row: pd.Series, column: str, fallback_values: Mapping[str, float]) -> float:
+    value = _finite_float_or_none(row.get(column))
+    if value is not None:
+        return value
+    return _finite_float(fallback_values.get(column))
+
+
+def _shared_metrics_block(
+    row: pd.Series,
+    target_fpr: float,
+    roc_group: pd.DataFrame | None = None,
+) -> dict[str, float]:
+    fallback_values = _shared_fixed_fpr_values_from_roc(row, roc_group, target_fpr)
+    recall = _shared_metric_value(row, fixed_fpr_metric_name("recall", target_fpr), fallback_values)
+    return {
+        "f1": _shared_metric_value(row, fixed_fpr_metric_name("f1", target_fpr), fallback_values),
+        "accuracy": _shared_metric_value(row, fixed_fpr_metric_name("accuracy", target_fpr), fallback_values),
+        "precision": _shared_metric_value(row, fixed_fpr_metric_name("precision", target_fpr), fallback_values),
+        "recall": recall,
+        "tpr": recall,
         "auc_roc": _finite_float(row.get("roc_auc")),
+    }
+
+
+def _shared_fpr_at_target_tpr(roc_group: pd.DataFrame | None, target_tpr: float) -> float:
+    if roc_group is None or roc_group.empty:
+        return 0.0
+    frame = roc_group.copy()
+    frame["tpr"] = pd.to_numeric(frame["tpr"], errors="coerce")
+    frame["fpr"] = pd.to_numeric(frame["fpr"], errors="coerce")
+    frame = frame.dropna(subset=["fpr", "tpr"])
+    valid = frame.loc[frame["tpr"] >= target_tpr]
+    if valid.empty:
+        return 0.0
+    sort_columns = ["fpr"]
+    ascending = [True]
+    if "threshold" in valid.columns:
+        sort_columns.append("threshold")
+        ascending.append(False)
+    return _finite_float(valid.sort_values(sort_columns, ascending=ascending).iloc[0]["fpr"])
+
+
+def _shared_presentation_metrics_block(row: pd.Series, roc_group: pd.DataFrame | None) -> dict[str, float]:
+    fixed_fpr_values = _shared_fixed_fpr_values_from_roc(row, roc_group, SHARED_PRESENTATION_TARGET_FPR)
+    tpr_column = target_fpr_metric_name(SHARED_PRESENTATION_TARGET_FPR)
+    tpr_at_target_fpr = _shared_metric_value(row, tpr_column, fixed_fpr_values)
+    return {
+        "tpr_at_0_1pct_fpr": tpr_at_target_fpr,
+        "fpr_at_80pct_tpr": _shared_fpr_at_target_tpr(roc_group, SHARED_PRESENTATION_TARGET_TPR),
+        "roc_auc": _finite_float(row.get("roc_auc")),
     }
 
 
@@ -357,9 +461,18 @@ def export_metrics_share_json(
 
     summary = pd.read_csv(summary_path)
     summary = summary.loc[summary["split"].astype(str) == "test"].copy()
+    roc_path = metrics_dir / "roc_points.csv"
+    roc = pd.read_csv(roc_path) if roc_path.exists() else pd.DataFrame()
     exported: list[dict] = []
     for _, row in summary.iterrows():
         detector_name = str(row["detector_name"])
+        split = str(row.get("split", "test"))
+        roc_group = None
+        if not roc.empty:
+            roc_group = roc.loc[
+                (roc["detector_name"].astype(str) == detector_name)
+                & (roc["split"].astype(str) == split)
+            ]
         model_used, additional_models = _shared_model_metadata(detector_name, config)
         payload = {
             "experiment_name": f"{experiment_name}_{detector_name}",
@@ -373,12 +486,94 @@ def export_metrics_share_json(
             },
         }
         for target_fpr, key in SHARED_METRIC_TARGETS:
-            payload[key] = _shared_metrics_block(row, target_fpr)
+            payload[key] = _shared_metrics_block(row, target_fpr, roc_group)
+        payload["presentation_metrics"] = _shared_presentation_metrics_block(row, roc_group)
 
         output_path = destination / f"{experiment_name}_{detector_name}.json"
         dump_json(payload, output_path)
         exported.append({"path": str(output_path), "payload": payload})
     return exported
+
+
+def _shared_roc_group_for_row(roc: pd.DataFrame, row: pd.Series) -> pd.DataFrame:
+    if roc.empty:
+        return roc
+
+    mask = pd.Series(True, index=roc.index)
+    for column in ("dataset_name", "dataset_used", "detector_name", "split"):
+        if column in roc.columns and column in row.index:
+            mask &= roc[column].astype(str).eq(str(row.get(column)))
+    return roc.loc[mask]
+
+
+def rewrite_metrics_share_jsons(
+    *,
+    metrics_share_dir: Path | str = METRICS_SHARE_DIR,
+    config: ColabExperimentConfig | None = None,
+    summary_filename: str = "all_test_dataset_metrics_summary.csv",
+    roc_filename: str = "all_test_dataset_roc_points.csv",
+) -> dict:
+    """Rewrite metrics_share JSONs from existing combined CSV outputs.
+
+    This does not score models or regenerate predictions. It only reads the
+    combined metrics summary and ROC point files already present in
+    metrics_share, then overwrites the per-dataset JSON exports.
+    """
+    destination = ensure_dir(metrics_share_dir)
+    summary_path = destination / summary_filename
+    roc_path = destination / roc_filename
+    if not summary_path.exists():
+        raise FileNotFoundError(f"Missing combined metrics summary: {summary_path}")
+    if not roc_path.exists():
+        raise FileNotFoundError(f"Missing combined ROC points: {roc_path}")
+
+    summary = pd.read_csv(summary_path)
+    summary = summary.loc[summary["split"].astype(str) == "test"].copy()
+    roc = pd.read_csv(roc_path)
+
+    rewritten: list[dict] = []
+    for _, row in summary.iterrows():
+        detector_name = _clean_scalar(row.get("detector_name"))
+        dataset_used = _clean_scalar(row.get("dataset_used"))
+        dataset_name = _clean_scalar(row.get("dataset_name")) or _dataset_name_from_path(dataset_used)
+        output_path = destination / f"{dataset_name}_{detector_name}.json"
+
+        existing_payload: dict = {}
+        if output_path.exists():
+            existing_payload = json.loads(output_path.read_text(encoding="utf-8"))
+
+        model_used, additional_models = _shared_model_metadata(detector_name, config)
+        existing_details = existing_payload.get("additional_details", {}) if isinstance(existing_payload, dict) else {}
+        if not additional_models:
+            additional_models = list(existing_details.get("additional_models_used", []))
+
+        roc_group = _shared_roc_group_for_row(roc, row)
+        payload = {
+            "experiment_name": f"{dataset_name}_{detector_name}",
+            "detection_method": detector_name,
+            "model_used": existing_payload.get("model_used", model_used) if isinstance(existing_payload, dict) else model_used,
+            "dataset_used": dataset_used,
+            "num_samples": int(_finite_float(row.get("num_samples"))),
+            "additional_details": {
+                "additional_models_used": additional_models,
+                "notes": existing_details.get("notes", "Exported from ZeroGPT Colab evaluation on test_dataset."),
+            },
+        }
+        for target_fpr, key in SHARED_METRIC_TARGETS:
+            payload[key] = _shared_metrics_block(row, target_fpr, roc_group)
+        payload["presentation_metrics"] = _shared_presentation_metrics_block(row, roc_group)
+
+        dump_json(payload, output_path)
+        rewritten.append({"path": str(output_path), "payload": payload})
+
+    manifest = {
+        "metrics_share_dir": str(destination),
+        "summary_path": str(summary_path),
+        "roc_path": str(roc_path),
+        "rewritten_metric_files": [item["path"] for item in rewritten],
+    }
+    dump_json(manifest, destination / "rewrite_metrics_share_jsons_manifest.json")
+    return manifest
 
 
 @dataclass
@@ -870,6 +1065,7 @@ __all__ = [
     "prepare_test_dataset_files",
     "prepare_training_data_without_test_dataset",
     "rebuild_hc3_from_source",
+    "rewrite_metrics_share_jsons",
     "run_baseline_reference",
     "run_gptzero_experiment",
     "run_test_dataset_evaluations",
