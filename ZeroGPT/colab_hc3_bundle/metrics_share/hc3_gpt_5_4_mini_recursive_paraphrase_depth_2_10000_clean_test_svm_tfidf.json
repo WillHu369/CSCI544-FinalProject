@@ -1,0 +1,40 @@
+{
+  "additional_details": {
+    "additional_models_used": [],
+    "notes": "Exported from ZeroGPT Colab evaluation on test_dataset."
+  },
+  "dataset_used": "hc3_gpt_5_4_mini_recursive_paraphrase_depth_2_10000_clean_test.csv",
+  "detection_method": "svm_tfidf",
+  "experiment_name": "hc3_gpt_5_4_mini_recursive_paraphrase_depth_2_10000_clean_test_svm_tfidf",
+  "metrics_at_0.01pct_fpr": {
+    "accuracy": 0.7558007662835249,
+    "auc_roc": 0.9950701287595136,
+    "f1": 0.4250559284116331,
+    "precision": 0.999321343739396,
+    "recall": 0.26993583868011,
+    "tpr": 0.26993583868011
+  },
+  "metrics_at_0.1pct_fpr": {
+    "accuracy": 0.8270957854406131,
+    "auc_roc": 0.9950701287595136,
+    "f1": 0.6522409222612663,
+    "precision": 0.9960459423837322,
+    "recall": 0.4848762603116407,
+    "tpr": 0.4848762603116407
+  },
+  "metrics_at_1pct_fpr": {
+    "accuracy": 0.9543908045977012,
+    "auc_roc": 0.9950701287595136,
+    "f1": 0.9283306039880552,
+    "precision": 0.9781770198944376,
+    "recall": 0.8833180568285977,
+    "tpr": 0.8833180568285977
+  },
+  "model_used": "linear_svm_tfidf",
+  "num_samples": 32625,
+  "presentation_metrics": {
+    "fpr_at_80pct_tpr": 0.0053879806585309,
+    "roc_auc": 0.9950701287595136,
+    "tpr_at_0_1pct_fpr": 0.4848762603116407
+  }
+}

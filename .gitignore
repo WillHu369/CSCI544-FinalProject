@@ -241,6 +241,10 @@ HC3-Recursive-Paraphrase/artifacts/checkpoints/*
 HC3-Recursive-Paraphrase/artifacts/api_calls/*
 !HC3-Recursive-Paraphrase/artifacts/api_calls/.gitkeep
 
+.DS_Store
+**/.DS_Store
+Metrics/Binoculars/Binoculars_Falcon-7b_hc3_semilog_roc.png
+
 # some semi_log scale code and outputs, just testing stuff
 DetectGPT-colab/semi_log_scale.py
 Metrics/DetectGPT/ROC_curve_csv/DetectGPT_openai-community_gpt2-large_hc3_all_semilog.csv

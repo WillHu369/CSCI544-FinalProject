@@ -3,11 +3,11 @@
   "combined_summary_path": "/content/drive/MyDrive/colab_hc3_bundle/metrics_share/all_test_dataset_metrics_summary.csv",
   "datasets": [
     {
-      "dataset_name": "hc3_gpt_5_4_mini_recursive_paraphrase_depth_1_test",
-      "dataset_used": "hc3_gpt_5_4_mini_recursive_paraphrase_depth_1_test.csv",
+      "dataset_name": "hc3_gpt_5_4_mini_recursive_paraphrase_depth_1_10000_clean_test",
+      "dataset_used": "hc3_gpt_5_4_mini_recursive_paraphrase_depth_1_10000_clean_test.csv",
       "evaluation": {
         "num_detectors": 3,
-        "num_predictions": 8484,
+        "num_predictions": 97872,
         "splits": [
           "test"
         ],
@@ -17,28 +17,28 @@
           0.0001
         ]
       },
-      "metrics_dir": "/content/drive/MyDrive/colab_hc3_bundle/artifacts/runs/test_dataset/hc3_gpt_5_4_mini_recursive_paraphrase_depth_1_test/metrics",
-      "run_dir": "/content/drive/MyDrive/colab_hc3_bundle/artifacts/runs/test_dataset/hc3_gpt_5_4_mini_recursive_paraphrase_depth_1_test",
-      "sample_path": "/content/drive/MyDrive/colab_hc3_bundle/artifacts/data/test_dataset_samples/hc3_gpt_5_4_mini_recursive_paraphrase_depth_1_test/test.csv",
+      "metrics_dir": "/content/drive/MyDrive/colab_hc3_bundle/artifacts/runs/test_dataset/hc3_gpt_5_4_mini_recursive_paraphrase_depth_1_10000_clean_test/metrics",
+      "run_dir": "/content/drive/MyDrive/colab_hc3_bundle/artifacts/runs/test_dataset/hc3_gpt_5_4_mini_recursive_paraphrase_depth_1_10000_clean_test",
+      "sample_path": "/content/drive/MyDrive/colab_hc3_bundle/artifacts/data/test_dataset_samples/hc3_gpt_5_4_mini_recursive_paraphrase_depth_1_10000_clean_test/test.csv",
       "scoring": {
-        "predictions_dir": "/content/drive/MyDrive/colab_hc3_bundle/artifacts/runs/test_dataset/hc3_gpt_5_4_mini_recursive_paraphrase_depth_1_test/predictions",
-        "run_id": "colab_run_20260417T215748Z",
+        "predictions_dir": "/content/drive/MyDrive/colab_hc3_bundle/artifacts/runs/test_dataset/hc3_gpt_5_4_mini_recursive_paraphrase_depth_1_10000_clean_test/predictions",
+        "run_id": "colab_run_20260419T232259Z",
         "score_splits": [
           "test"
         ]
       },
       "shared_metric_files": [
-        "/content/drive/MyDrive/colab_hc3_bundle/metrics_share/hc3_gpt_5_4_mini_recursive_paraphrase_depth_1_test_gptzero_like.json",
-        "/content/drive/MyDrive/colab_hc3_bundle/metrics_share/hc3_gpt_5_4_mini_recursive_paraphrase_depth_1_test_svm_tfidf.json",
-        "/content/drive/MyDrive/colab_hc3_bundle/metrics_share/hc3_gpt_5_4_mini_recursive_paraphrase_depth_1_test_xgboost_tfidf.json"
+        "/content/drive/MyDrive/colab_hc3_bundle/metrics_share/hc3_gpt_5_4_mini_recursive_paraphrase_depth_1_10000_clean_test_gptzero_like.json",
+        "/content/drive/MyDrive/colab_hc3_bundle/metrics_share/hc3_gpt_5_4_mini_recursive_paraphrase_depth_1_10000_clean_test_svm_tfidf.json",
+        "/content/drive/MyDrive/colab_hc3_bundle/metrics_share/hc3_gpt_5_4_mini_recursive_paraphrase_depth_1_10000_clean_test_xgboost_tfidf.json"
       ]
     },
     {
-      "dataset_name": "hc3_gpt_5_4_mini_recursive_paraphrase_depth_2_test",
-      "dataset_used": "hc3_gpt_5_4_mini_recursive_paraphrase_depth_2_test.csv",
+      "dataset_name": "hc3_gpt_5_4_mini_recursive_paraphrase_depth_2_10000_clean_test",
+      "dataset_used": "hc3_gpt_5_4_mini_recursive_paraphrase_depth_2_10000_clean_test.csv",
       "evaluation": {
         "num_detectors": 3,
-        "num_predictions": 8484,
+        "num_predictions": 97875,
         "splits": [
           "test"
         ],
@@ -48,28 +48,28 @@
           0.0001
         ]
       },
-      "metrics_dir": "/content/drive/MyDrive/colab_hc3_bundle/artifacts/runs/test_dataset/hc3_gpt_5_4_mini_recursive_paraphrase_depth_2_test/metrics",
-      "run_dir": "/content/drive/MyDrive/colab_hc3_bundle/artifacts/runs/test_dataset/hc3_gpt_5_4_mini_recursive_paraphrase_depth_2_test",
-      "sample_path": "/content/drive/MyDrive/colab_hc3_bundle/artifacts/data/test_dataset_samples/hc3_gpt_5_4_mini_recursive_paraphrase_depth_2_test/test.csv",
+      "metrics_dir": "/content/drive/MyDrive/colab_hc3_bundle/artifacts/runs/test_dataset/hc3_gpt_5_4_mini_recursive_paraphrase_depth_2_10000_clean_test/metrics",
+      "run_dir": "/content/drive/MyDrive/colab_hc3_bundle/artifacts/runs/test_dataset/hc3_gpt_5_4_mini_recursive_paraphrase_depth_2_10000_clean_test",
+      "sample_path": "/content/drive/MyDrive/colab_hc3_bundle/artifacts/data/test_dataset_samples/hc3_gpt_5_4_mini_recursive_paraphrase_depth_2_10000_clean_test/test.csv",
       "scoring": {
-        "predictions_dir": "/content/drive/MyDrive/colab_hc3_bundle/artifacts/runs/test_dataset/hc3_gpt_5_4_mini_recursive_paraphrase_depth_2_test/predictions",
-        "run_id": "colab_run_20260417T215831Z",
+        "predictions_dir": "/content/drive/MyDrive/colab_hc3_bundle/artifacts/runs/test_dataset/hc3_gpt_5_4_mini_recursive_paraphrase_depth_2_10000_clean_test/predictions",
+        "run_id": "colab_run_20260419T232610Z",
         "score_splits": [
           "test"
         ]
       },
       "shared_metric_files": [
-        "/content/drive/MyDrive/colab_hc3_bundle/metrics_share/hc3_gpt_5_4_mini_recursive_paraphrase_depth_2_test_gptzero_like.json",
-        "/content/drive/MyDrive/colab_hc3_bundle/metrics_share/hc3_gpt_5_4_mini_recursive_paraphrase_depth_2_test_svm_tfidf.json",
-        "/content/drive/MyDrive/colab_hc3_bundle/metrics_share/hc3_gpt_5_4_mini_recursive_paraphrase_depth_2_test_xgboost_tfidf.json"
+        "/content/drive/MyDrive/colab_hc3_bundle/metrics_share/hc3_gpt_5_4_mini_recursive_paraphrase_depth_2_10000_clean_test_gptzero_like.json",
+        "/content/drive/MyDrive/colab_hc3_bundle/metrics_share/hc3_gpt_5_4_mini_recursive_paraphrase_depth_2_10000_clean_test_svm_tfidf.json",
+        "/content/drive/MyDrive/colab_hc3_bundle/metrics_share/hc3_gpt_5_4_mini_recursive_paraphrase_depth_2_10000_clean_test_xgboost_tfidf.json"
       ]
     },
     {
-      "dataset_name": "hc3_gpt_5_4_mini_recursive_paraphrase_depth_3_test",
-      "dataset_used": "hc3_gpt_5_4_mini_recursive_paraphrase_depth_3_test.csv",
+      "dataset_name": "hc3_gpt_5_4_mini_recursive_paraphrase_depth_3_10000_clean_test",
+      "dataset_used": "hc3_gpt_5_4_mini_recursive_paraphrase_depth_3_10000_clean_test.csv",
       "evaluation": {
         "num_detectors": 3,
-        "num_predictions": 8487,
+        "num_predictions": 97875,
         "splits": [
           "test"
         ],
@@ -79,28 +79,28 @@
           0.0001
         ]
       },
-      "metrics_dir": "/content/drive/MyDrive/colab_hc3_bundle/artifacts/runs/test_dataset/hc3_gpt_5_4_mini_recursive_paraphrase_depth_3_test/metrics",
-      "run_dir": "/content/drive/MyDrive/colab_hc3_bundle/artifacts/runs/test_dataset/hc3_gpt_5_4_mini_recursive_paraphrase_depth_3_test",
-      "sample_path": "/content/drive/MyDrive/colab_hc3_bundle/artifacts/data/test_dataset_samples/hc3_gpt_5_4_mini_recursive_paraphrase_depth_3_test/test.csv",
+      "metrics_dir": "/content/drive/MyDrive/colab_hc3_bundle/artifacts/runs/test_dataset/hc3_gpt_5_4_mini_recursive_paraphrase_depth_3_10000_clean_test/metrics",
+      "run_dir": "/content/drive/MyDrive/colab_hc3_bundle/artifacts/runs/test_dataset/hc3_gpt_5_4_mini_recursive_paraphrase_depth_3_10000_clean_test",
+      "sample_path": "/content/drive/MyDrive/colab_hc3_bundle/artifacts/data/test_dataset_samples/hc3_gpt_5_4_mini_recursive_paraphrase_depth_3_10000_clean_test/test.csv",
       "scoring": {
-        "predictions_dir": "/content/drive/MyDrive/colab_hc3_bundle/artifacts/runs/test_dataset/hc3_gpt_5_4_mini_recursive_paraphrase_depth_3_test/predictions",
-        "run_id": "colab_run_20260417T215914Z",
+        "predictions_dir": "/content/drive/MyDrive/colab_hc3_bundle/artifacts/runs/test_dataset/hc3_gpt_5_4_mini_recursive_paraphrase_depth_3_10000_clean_test/predictions",
+        "run_id": "colab_run_20260419T232922Z",
         "score_splits": [
           "test"
         ]
       },
       "shared_metric_files": [
-        "/content/drive/MyDrive/colab_hc3_bundle/metrics_share/hc3_gpt_5_4_mini_recursive_paraphrase_depth_3_test_gptzero_like.json",
-        "/content/drive/MyDrive/colab_hc3_bundle/metrics_share/hc3_gpt_5_4_mini_recursive_paraphrase_depth_3_test_svm_tfidf.json",
-        "/content/drive/MyDrive/colab_hc3_bundle/metrics_share/hc3_gpt_5_4_mini_recursive_paraphrase_depth_3_test_xgboost_tfidf.json"
+        "/content/drive/MyDrive/colab_hc3_bundle/metrics_share/hc3_gpt_5_4_mini_recursive_paraphrase_depth_3_10000_clean_test_gptzero_like.json",
+        "/content/drive/MyDrive/colab_hc3_bundle/metrics_share/hc3_gpt_5_4_mini_recursive_paraphrase_depth_3_10000_clean_test_svm_tfidf.json",
+        "/content/drive/MyDrive/colab_hc3_bundle/metrics_share/hc3_gpt_5_4_mini_recursive_paraphrase_depth_3_10000_clean_test_xgboost_tfidf.json"
       ]
     },
     {
-      "dataset_name": "hc3_stylistic_cleanup_test",
-      "dataset_used": "hc3_stylistic_cleanup_test.csv",
+      "dataset_name": "hc3_stylistic_cleanup_10000_clean_test",
+      "dataset_used": "hc3_stylistic_cleanup_10000_clean_test.csv",
       "evaluation": {
         "num_detectors": 3,
-        "num_predictions": 8487,
+        "num_predictions": 93732,
         "splits": [
           "test"
         ],
@@ -110,28 +110,28 @@
           0.0001
         ]
       },
-      "metrics_dir": "/content/drive/MyDrive/colab_hc3_bundle/artifacts/runs/test_dataset/hc3_stylistic_cleanup_test/metrics",
-      "run_dir": "/content/drive/MyDrive/colab_hc3_bundle/artifacts/runs/test_dataset/hc3_stylistic_cleanup_test",
-      "sample_path": "/content/drive/MyDrive/colab_hc3_bundle/artifacts/data/test_dataset_samples/hc3_stylistic_cleanup_test/test.csv",
+      "metrics_dir": "/content/drive/MyDrive/colab_hc3_bundle/artifacts/runs/test_dataset/hc3_stylistic_cleanup_10000_clean_test/metrics",
+      "run_dir": "/content/drive/MyDrive/colab_hc3_bundle/artifacts/runs/test_dataset/hc3_stylistic_cleanup_10000_clean_test",
+      "sample_path": "/content/drive/MyDrive/colab_hc3_bundle/artifacts/data/test_dataset_samples/hc3_stylistic_cleanup_10000_clean_test/test.csv",
       "scoring": {
-        "predictions_dir": "/content/drive/MyDrive/colab_hc3_bundle/artifacts/runs/test_dataset/hc3_stylistic_cleanup_test/predictions",
-        "run_id": "colab_run_20260417T215957Z",
+        "predictions_dir": "/content/drive/MyDrive/colab_hc3_bundle/artifacts/runs/test_dataset/hc3_stylistic_cleanup_10000_clean_test/predictions",
+        "run_id": "colab_run_20260419T233233Z",
         "score_splits": [
           "test"
         ]
       },
       "shared_metric_files": [
-        "/content/drive/MyDrive/colab_hc3_bundle/metrics_share/hc3_stylistic_cleanup_test_gptzero_like.json",
-        "/content/drive/MyDrive/colab_hc3_bundle/metrics_share/hc3_stylistic_cleanup_test_svm_tfidf.json",
-        "/content/drive/MyDrive/colab_hc3_bundle/metrics_share/hc3_stylistic_cleanup_test_xgboost_tfidf.json"
+        "/content/drive/MyDrive/colab_hc3_bundle/metrics_share/hc3_stylistic_cleanup_10000_clean_test_gptzero_like.json",
+        "/content/drive/MyDrive/colab_hc3_bundle/metrics_share/hc3_stylistic_cleanup_10000_clean_test_svm_tfidf.json",
+        "/content/drive/MyDrive/colab_hc3_bundle/metrics_share/hc3_stylistic_cleanup_10000_clean_test_xgboost_tfidf.json"
       ]
     },
     {
-      "dataset_name": "hc3_unified_1000_seed42_test",
-      "dataset_used": "hc3_unified_1000_seed42_test.csv",
+      "dataset_name": "hc3_unified_10000_seed42_clean_test",
+      "dataset_used": "hc3_unified_10000_seed42_clean_test.csv",
       "evaluation": {
         "num_detectors": 3,
-        "num_predictions": 8487,
+        "num_predictions": 97872,
         "splits": [
           "test"
         ],
@@ -141,20 +141,20 @@
           0.0001
         ]
       },
-      "metrics_dir": "/content/drive/MyDrive/colab_hc3_bundle/artifacts/runs/test_dataset/hc3_unified_1000_seed42_test/metrics",
-      "run_dir": "/content/drive/MyDrive/colab_hc3_bundle/artifacts/runs/test_dataset/hc3_unified_1000_seed42_test",
-      "sample_path": "/content/drive/MyDrive/colab_hc3_bundle/artifacts/data/test_dataset_samples/hc3_unified_1000_seed42_test/test.csv",
+      "metrics_dir": "/content/drive/MyDrive/colab_hc3_bundle/artifacts/runs/test_dataset/hc3_unified_10000_seed42_clean_test/metrics",
+      "run_dir": "/content/drive/MyDrive/colab_hc3_bundle/artifacts/runs/test_dataset/hc3_unified_10000_seed42_clean_test",
+      "sample_path": "/content/drive/MyDrive/colab_hc3_bundle/artifacts/data/test_dataset_samples/hc3_unified_10000_seed42_clean_test/test.csv",
       "scoring": {
-        "predictions_dir": "/content/drive/MyDrive/colab_hc3_bundle/artifacts/runs/test_dataset/hc3_unified_1000_seed42_test/predictions",
-        "run_id": "colab_run_20260417T220041Z",
+        "predictions_dir": "/content/drive/MyDrive/colab_hc3_bundle/artifacts/runs/test_dataset/hc3_unified_10000_seed42_clean_test/predictions",
+        "run_id": "colab_run_20260419T233547Z",
         "score_splits": [
           "test"
         ]
       },
       "shared_metric_files": [
-        "/content/drive/MyDrive/colab_hc3_bundle/metrics_share/hc3_unified_1000_seed42_test_gptzero_like.json",
-        "/content/drive/MyDrive/colab_hc3_bundle/metrics_share/hc3_unified_1000_seed42_test_svm_tfidf.json",
-        "/content/drive/MyDrive/colab_hc3_bundle/metrics_share/hc3_unified_1000_seed42_test_xgboost_tfidf.json"
+        "/content/drive/MyDrive/colab_hc3_bundle/metrics_share/hc3_unified_10000_seed42_clean_test_gptzero_like.json",
+        "/content/drive/MyDrive/colab_hc3_bundle/metrics_share/hc3_unified_10000_seed42_clean_test_svm_tfidf.json",
+        "/content/drive/MyDrive/colab_hc3_bundle/metrics_share/hc3_unified_10000_seed42_clean_test_xgboost_tfidf.json"
       ]
     }
   ],
@@ -162,21 +162,21 @@
   "prepared_data_dir": "/content/drive/MyDrive/colab_hc3_bundle/artifacts/data/test_dataset_samples",
   "run_root": "/content/drive/MyDrive/colab_hc3_bundle/artifacts/runs/test_dataset",
   "shared_metric_files": [
-    "/content/drive/MyDrive/colab_hc3_bundle/metrics_share/hc3_gpt_5_4_mini_recursive_paraphrase_depth_1_test_gptzero_like.json",
-    "/content/drive/MyDrive/colab_hc3_bundle/metrics_share/hc3_gpt_5_4_mini_recursive_paraphrase_depth_1_test_svm_tfidf.json",
-    "/content/drive/MyDrive/colab_hc3_bundle/metrics_share/hc3_gpt_5_4_mini_recursive_paraphrase_depth_1_test_xgboost_tfidf.json",
-    "/content/drive/MyDrive/colab_hc3_bundle/metrics_share/hc3_gpt_5_4_mini_recursive_paraphrase_depth_2_test_gptzero_like.json",
-    "/content/drive/MyDrive/colab_hc3_bundle/metrics_share/hc3_gpt_5_4_mini_recursive_paraphrase_depth_2_test_svm_tfidf.json",
-    "/content/drive/MyDrive/colab_hc3_bundle/metrics_share/hc3_gpt_5_4_mini_recursive_paraphrase_depth_2_test_xgboost_tfidf.json",
-    "/content/drive/MyDrive/colab_hc3_bundle/metrics_share/hc3_gpt_5_4_mini_recursive_paraphrase_depth_3_test_gptzero_like.json",
-    "/content/drive/MyDrive/colab_hc3_bundle/metrics_share/hc3_gpt_5_4_mini_recursive_paraphrase_depth_3_test_svm_tfidf.json",
-    "/content/drive/MyDrive/colab_hc3_bundle/metrics_share/hc3_gpt_5_4_mini_recursive_paraphrase_depth_3_test_xgboost_tfidf.json",
-    "/content/drive/MyDrive/colab_hc3_bundle/metrics_share/hc3_stylistic_cleanup_test_gptzero_like.json",
-    "/content/drive/MyDrive/colab_hc3_bundle/metrics_share/hc3_stylistic_cleanup_test_svm_tfidf.json",
-    "/content/drive/MyDrive/colab_hc3_bundle/metrics_share/hc3_stylistic_cleanup_test_xgboost_tfidf.json",
-    "/content/drive/MyDrive/colab_hc3_bundle/metrics_share/hc3_unified_1000_seed42_test_gptzero_like.json",
-    "/content/drive/MyDrive/colab_hc3_bundle/metrics_share/hc3_unified_1000_seed42_test_svm_tfidf.json",
-    "/content/drive/MyDrive/colab_hc3_bundle/metrics_share/hc3_unified_1000_seed42_test_xgboost_tfidf.json"
+    "/content/drive/MyDrive/colab_hc3_bundle/metrics_share/hc3_gpt_5_4_mini_recursive_paraphrase_depth_1_10000_clean_test_gptzero_like.json",
+    "/content/drive/MyDrive/colab_hc3_bundle/metrics_share/hc3_gpt_5_4_mini_recursive_paraphrase_depth_1_10000_clean_test_svm_tfidf.json",
+    "/content/drive/MyDrive/colab_hc3_bundle/metrics_share/hc3_gpt_5_4_mini_recursive_paraphrase_depth_1_10000_clean_test_xgboost_tfidf.json",
+    "/content/drive/MyDrive/colab_hc3_bundle/metrics_share/hc3_gpt_5_4_mini_recursive_paraphrase_depth_2_10000_clean_test_gptzero_like.json",
+    "/content/drive/MyDrive/colab_hc3_bundle/metrics_share/hc3_gpt_5_4_mini_recursive_paraphrase_depth_2_10000_clean_test_svm_tfidf.json",
+    "/content/drive/MyDrive/colab_hc3_bundle/metrics_share/hc3_gpt_5_4_mini_recursive_paraphrase_depth_2_10000_clean_test_xgboost_tfidf.json",
+    "/content/drive/MyDrive/colab_hc3_bundle/metrics_share/hc3_gpt_5_4_mini_recursive_paraphrase_depth_3_10000_clean_test_gptzero_like.json",
+    "/content/drive/MyDrive/colab_hc3_bundle/metrics_share/hc3_gpt_5_4_mini_recursive_paraphrase_depth_3_10000_clean_test_svm_tfidf.json",
+    "/content/drive/MyDrive/colab_hc3_bundle/metrics_share/hc3_gpt_5_4_mini_recursive_paraphrase_depth_3_10000_clean_test_xgboost_tfidf.json",
+    "/content/drive/MyDrive/colab_hc3_bundle/metrics_share/hc3_stylistic_cleanup_10000_clean_test_gptzero_like.json",
+    "/content/drive/MyDrive/colab_hc3_bundle/metrics_share/hc3_stylistic_cleanup_10000_clean_test_svm_tfidf.json",
+    "/content/drive/MyDrive/colab_hc3_bundle/metrics_share/hc3_stylistic_cleanup_10000_clean_test_xgboost_tfidf.json",
+    "/content/drive/MyDrive/colab_hc3_bundle/metrics_share/hc3_unified_10000_seed42_clean_test_gptzero_like.json",
+    "/content/drive/MyDrive/colab_hc3_bundle/metrics_share/hc3_unified_10000_seed42_clean_test_svm_tfidf.json",
+    "/content/drive/MyDrive/colab_hc3_bundle/metrics_share/hc3_unified_10000_seed42_clean_test_xgboost_tfidf.json"
   ],
   "test_dataset_dir": "/content/drive/MyDrive/colab_hc3_bundle/test_dataset"
 }
