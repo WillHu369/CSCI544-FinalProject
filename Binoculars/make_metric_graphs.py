@@ -25,6 +25,7 @@ METHODS: List[MethodSpec] = [
 
 VARIANT_LABELS = {
     "original_clean": "Baseline 10000",
+    "stylistic_cleanup": "Stylistic Cleanup 10000",
 }
 
 

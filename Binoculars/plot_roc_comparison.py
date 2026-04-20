@@ -11,18 +11,24 @@ def repo_root() -> Path:
 
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(
-        description="Plot ROC curves for multiple detectors on the baseline (original clean) dataset."
+        description="Plot ROC curves for multiple detectors on the requested dataset variant."
     )
     parser.add_argument(
         "--output",
         type=Path,
-        default=repo_root() / "Metrics" / "plots" / "roc_curves_original_clean.png",
-        help="Output PNG path (default: Metrics/plots/roc_curves_original_clean.png).",
+        default=None,
+        help="Output PNG path (defaults to Metrics/plots/roc_curves_<variant>.png).",
     )
     parser.add_argument(
-        "--baseline-name",
-        default="hc3_unified_10000_seed42_clean_test",
-        help="dataset_name value to filter the ZeroGPT ROC points CSV (default: hc3_unified_10000_seed42_clean_test).",
+        "--variant",
+        choices=["original_clean", "stylistic_cleanup"],
+        default="original_clean",
+        help="Dataset variant to plot (default: original_clean).",
+    )
+    parser.add_argument(
+        "--detectors",
+        default="detectgpt_gpt2_large,detectgpt_falcon_7b,detectgpt_falcon_instruct,binoculars,gptzero,xgb,svm",
+        help="Comma-separated detectors to include (default: include all available).",
     )
     return parser.parse_args()
 
@@ -36,8 +42,11 @@ def read_roc_csv(path: Path, sep: str = ",") -> Tuple["pd.Series", "pd.Series"]:
     return df["fpr"], df["tpr"]
 
 
-def load_binoculars(metrics_dir: Path) -> Optional[Tuple["pd.Series", "pd.Series"]]:
-    path = metrics_dir / "Binoculars" / "Binoculars-10000.csv"
+def load_binoculars(metrics_dir: Path, variant: str) -> Optional[Tuple["pd.Series", "pd.Series"]]:
+    if variant == "stylistic_cleanup":
+        path = metrics_dir / "Binoculars" / "Binoculars-stylistic-cleanup.csv"
+    else:
+        path = metrics_dir / "Binoculars" / "Binoculars-10000.csv"
     if not path.exists():
         return None
     return read_roc_csv(path, sep="\t")
@@ -50,20 +59,30 @@ def load_detectgpt(metrics_dir: Path) -> Dict[str, Tuple["pd.Series", "pd.Series
         return out
 
     mapping = {
-        "DetectGPT (GPT2-Large)": "DetectGPT_openai-community_gpt2-large_hc3_all.csv",
-        "DetectGPT (Falcon-7B)": "DetectGPT_tiiuae_falcon-7b_hc3_all.csv",
-        "DetectGPT (Falcon-Instruct)": "DetectGPT_tiiuae_falcon-7b-instruct_hc3_all.csv",
+        "detectgpt_gpt2_large": (
+            "DetectGPT (GPT2-Large)",
+            "DetectGPT_openai-community_gpt2-large_hc3_all.csv",
+        ),
+        "detectgpt_falcon_7b": (
+            "DetectGPT (Falcon-7B)",
+            "DetectGPT_tiiuae_falcon-7b_hc3_all.csv",
+        ),
+        "detectgpt_falcon_instruct": (
+            "DetectGPT (Falcon-Instruct)",
+            "DetectGPT_tiiuae_falcon-7b-instruct_hc3_all.csv",
+        ),
     }
     for label, filename in mapping.items():
-        path = roc_dir / filename
+        pretty, file = filename
+        path = roc_dir / file
         if not path.exists():
             continue
-        out[label] = read_roc_csv(path, sep=",")
+        out[pretty] = read_roc_csv(path, sep=",")
     return out
 
 
 def load_zerogpt_points(
-    metrics_dir: Path, baseline_name: str
+    metrics_dir: Path, dataset_name: str
 ) -> Dict[str, Tuple["pd.Series", "pd.Series"]]:
     import pandas as pd
 
@@ -77,7 +96,7 @@ def load_zerogpt_points(
     if missing:
         raise ValueError(f"ZeroGPT ROC points missing columns {missing}: {path}")
 
-    df = df[(df["split"] == "test") & (df["dataset_name"] == baseline_name)]
+    df = df[(df["split"] == "test") & (df["dataset_name"] == dataset_name)]
     if df.empty:
         return {}
 
@@ -108,14 +127,41 @@ def main() -> None:
     matplotlib.use("Agg")
     import matplotlib.pyplot as plt
 
+    variant_to_dataset_name = {
+        "original_clean": "hc3_unified_10000_seed42_clean_test",
+        "stylistic_cleanup": "hc3_stylistic_cleanup_10000_clean_test",
+    }
+    dataset_name = variant_to_dataset_name[args.variant]
+
+    requested = [d.strip() for d in args.detectors.split(",") if d.strip()]
+    want = set(requested)
+
     curves: Dict[str, Tuple["pd.Series", "pd.Series"]] = {}
 
-    bino = load_binoculars(metrics_dir)
-    if bino is not None:
-        curves["Binoculars"] = bino
+    if "binoculars" in want:
+        bino = load_binoculars(metrics_dir, variant=args.variant)
+        if bino is not None:
+            curves["Binoculars"] = bino
 
-    curves.update(load_detectgpt(metrics_dir))
-    curves.update(load_zerogpt_points(metrics_dir, baseline_name=args.baseline_name))
+    # DetectGPT ROC curves are only available for the original_clean dataset.
+    if args.variant == "original_clean" and any(d.startswith("detectgpt_") for d in want):
+        detect_curves = load_detectgpt(metrics_dir)
+        key_to_label = {
+            "detectgpt_gpt2_large": "DetectGPT (GPT2-Large)",
+            "detectgpt_falcon_7b": "DetectGPT (Falcon-7B)",
+            "detectgpt_falcon_instruct": "DetectGPT (Falcon-Instruct)",
+        }
+        for key, pretty in key_to_label.items():
+            if key in want and pretty in detect_curves:
+                curves[pretty] = detect_curves[pretty]
+
+    zero_curves = load_zerogpt_points(metrics_dir, dataset_name=dataset_name)
+    if "gptzero" in want and "GPTZero" in zero_curves:
+        curves["GPTZero"] = zero_curves["GPTZero"]
+    if "xgb" in want and "XGB" in zero_curves:
+        curves["XGB"] = zero_curves["XGB"]
+    if "svm" in want and "SVM" in zero_curves:
+        curves["SVM"] = zero_curves["SVM"]
 
     if not curves:
         raise SystemExit("No ROC curve sources found under Metrics/.")
@@ -158,20 +204,24 @@ def main() -> None:
 
     ax.set_xlabel("False Positive Rate (FPR)")
     ax.set_ylabel("True Positive Rate (TPR)")
-    ax.set_title("ROC Curves (Baseline 10000)")
+    title = "ROC Curves (Baseline 10000)" if args.variant == "original_clean" else "ROC Curves (Stylistic Cleanup 10000)"
+    ax.set_title(title)
     ax.set_xlim(0.0, 1.0)
     ax.set_ylim(0.0, 1.0)
     ax.grid(True, linestyle="--", linewidth=0.6, alpha=0.35)
     ax.legend(loc="lower right", fontsize=8, frameon=True)
 
-    args.output.parent.mkdir(parents=True, exist_ok=True)
+    output = args.output
+    if output is None:
+        output = repo_root() / "Metrics" / "plots" / f"roc_curves_{args.variant}.png"
+
+    output.parent.mkdir(parents=True, exist_ok=True)
     fig.tight_layout()
-    fig.savefig(args.output, bbox_inches="tight")
+    fig.savefig(output, bbox_inches="tight")
     plt.close(fig)
 
-    print(f"Wrote {args.output}")
+    print(f"Wrote {output}")
 
 
 if __name__ == "__main__":
     main()
-
