@@ -204,7 +204,7 @@ def _openai_sample(p):
     return p + r['choices'][0].text
 
 
-# sample from base_model using ****only**** the first 30 tokens in each example as context
+# sample from base_model using the first prompt_tokens in each example as context
 def sample_from_model(texts, min_words=55, prompt_tokens=30):
     # encode each text as a list of token ids
     if args.dataset == 'pubmed':
@@ -597,7 +597,11 @@ def generate_samples(raw_data, batch_size):
     for batch in range(len(raw_data) // batch_size):
         print('Generating samples for batch', batch, 'of', len(raw_data) // batch_size)
         original_text = raw_data[batch * batch_size:(batch + 1) * batch_size]
-        sampled_text = sample_from_model(original_text, min_words=30 if args.dataset in ['pubmed'] else 55)
+        sampled_text = sample_from_model(
+            original_text,
+            min_words=30 if args.dataset in ['pubmed'] else 55,
+            prompt_tokens=args.prompt_tokens,
+        )
 
         for o, s in zip(original_text, sampled_text):
             if args.dataset == 'pubmed':
@@ -761,6 +765,7 @@ if __name__ == '__main__':
     parser.add_argument('--batch_size', type=int, default=50)
     parser.add_argument('--chunk_size', type=int, default=20)
     parser.add_argument('--n_similarity_samples', type=int, default=20)
+    parser.add_argument('--prompt_tokens', type=int, default=30)
     parser.add_argument('--int8', action='store_true')
     parser.add_argument('--half', action='store_true')
     parser.add_argument('--base_half', action='store_true')
@@ -781,6 +786,9 @@ if __name__ == '__main__':
     parser.add_argument('--random_fills_tokens', action='store_true')
     parser.add_argument('--cache_dir', type=str, default="~/.cache")
     args = parser.parse_args()
+
+    if args.prompt_tokens <= 0:
+        raise ValueError("--prompt_tokens must be > 0")
 
     API_TOKEN_COUNTER = 0
 
@@ -823,6 +831,7 @@ if __name__ == '__main__':
     if not os.path.exists(cache_dir):
         os.makedirs(cache_dir)
     print(f"Using cache dir {cache_dir}")
+    print(f"Using prompt_tokens={args.prompt_tokens} for non-pubmed sample generation")
 
     GPT2_TOKENIZER = transformers.GPT2Tokenizer.from_pretrained('gpt2', cache_dir=cache_dir)
 
