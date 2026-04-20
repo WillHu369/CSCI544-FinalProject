@@ -1,5 +1,7 @@
 import json
 import argparse
+import csv
+import re
 from pathlib import Path
 import numpy as np
 from sklearn.metrics import (
@@ -76,6 +78,19 @@ def compute_binary_metrics_at_target_fpr(y_true, y_score, target_fpr):
         "f1": float(f1),
     }
 
+
+def write_roc_curve_csv(fpr, tpr, thresholds, out_path):
+    with open(out_path, "w", encoding="utf-8", newline="") as f:
+        writer = csv.writer(f)
+        writer.writerow(["fpr", "tpr", "threshold"])
+        for fpr_i, tpr_i, thr_i in zip(fpr, tpr, thresholds):
+            writer.writerow([float(fpr_i), float(tpr_i), float(thr_i)])
+
+
+def sanitize_filename_part(value):
+    cleaned = re.sub(r"[^A-Za-z0-9._-]+", "_", str(value).strip())
+    return cleaned.strip("._-") or "unknown"
+
 def resolve_results_path(path_str):
     p = Path(path_str)
     if p.is_absolute() and p.exists():
@@ -110,6 +125,7 @@ y_true = np.array([0]*len(real) + [1]*len(samples))
 y_score = np.concatenate([real, samples])
 
 # Threshold-free metrics
+fpr_curve, tpr_curve, thresholds_curve = roc_curve(y_true, y_score)
 roc_auc = roc_auc_score(y_true, y_score)
 
 # Evaluate at 1% FPR (0.01) and 0.1% FPR (0.001).
@@ -143,6 +159,7 @@ output_payload = {
         "accuracy": metrics_at_1pct["accuracy"],
         "precision": metrics_at_1pct["precision"],
         "recall": metrics_at_1pct["recall"],
+        "tpr": metrics_at_1pct["actual_tpr"],
         "auc_roc": float(roc_auc)
     },
     "metrics_at_0.1pct_fpr": {
@@ -150,6 +167,7 @@ output_payload = {
         "accuracy": metrics_at_0_1pct["accuracy"],
         "precision": metrics_at_0_1pct["precision"],
         "recall": metrics_at_0_1pct["recall"],
+        "tpr": metrics_at_0_1pct["actual_tpr"],
         "auc_roc": float(roc_auc)
     }
 }
@@ -157,26 +175,16 @@ output_payload = {
 output_dir = Path(__file__).resolve().parent / "metric_results"
 output_dir.mkdir(parents=True, exist_ok=True)
 output_path = output_dir / f"RESULTS_{results_path.stem}.json"
+roc_csv_filename = (
+    f"{sanitize_filename_part(metadata['detection_method'])}_"
+    f"{sanitize_filename_part(metadata['model_used'])}_"
+    f"{sanitize_filename_part(metadata['dataset_used'])}.csv"
+)
+roc_csv_path = output_dir / roc_csv_filename
 
 with open(output_path, "w", encoding="utf-8") as f:
     json.dump(output_payload, f, indent=2)
 
-print("ROC-AUC:", roc_auc)
-print("threshold @1% FPR:", metrics_at_1pct["selected_threshold"])
-print(
-    "confusion matrix @1% FPR [[TN, FP], [FN, TP]] =",
-    [[metrics_at_1pct["tn"], metrics_at_1pct["fp"]], [metrics_at_1pct["fn"], metrics_at_1pct["tp"]]],
-)
-print(
-    "accuracy:",
-    metrics_at_1pct["accuracy"],
-    "precision:",
-    metrics_at_1pct["precision"],
-    "recall:",
-    metrics_at_1pct["recall"],
-    "f1@1%:",
-    metrics_at_1pct["f1"],
-    "f1@0.1%:",
-    metrics_at_0_1pct["f1"],
-)
-print("Saved metrics JSON to:", output_path)
+write_roc_curve_csv(fpr_curve, tpr_curve, thresholds_curve, roc_csv_path)
+
+print(json.dumps(output_payload, indent=2))
