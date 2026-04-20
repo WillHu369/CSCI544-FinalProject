@@ -199,15 +199,18 @@ def metrics_at_max_fpr(y_true, scores, max_fpr: float, auc_roc: Optional[float])
             "accuracy": None,
             "precision": None,
             "recall": None,
+            "tpr": None,
             "auc_roc": auc_roc,
         }
 
     y_pred = predict_from_scores(scores, threshold)
+    recall = float(recall_score(y_true, y_pred, pos_label=1, zero_division=0))
     return {
         "f1": float(f1_score(y_true, y_pred, pos_label=1, zero_division=0)),
         "accuracy": float(accuracy_score(y_true, y_pred)),
         "precision": float(precision_score(y_true, y_pred, pos_label=1, zero_division=0)),
-        "recall": float(recall_score(y_true, y_pred, pos_label=1, zero_division=0)),
+        "recall": recall,
+        "tpr": recall,
         "auc_roc": auc_roc,
     }
 
@@ -278,4 +281,3 @@ def main() -> None:
 
 if __name__ == "__main__":
     main()
-
