@@ -3,7 +3,9 @@
 import argparse
 import json
 from pathlib import Path
+from typing import Optional
 
+import numpy as np
 import pandas as pd
 from sklearn.metrics import (
     accuracy_score,
@@ -12,6 +14,7 @@ from sklearn.metrics import (
     precision_score,
     recall_score,
     roc_auc_score,
+    roc_curve,
 )
 
 
@@ -55,6 +58,32 @@ def parse_args() -> argparse.Namespace:
         type=Path,
         help="Directory where scored_samples.csv and summary.json are written.",
     )
+    parser.add_argument(
+        "--experiment-name",
+        default=None,
+        help="Name for summary.json (defaults to input filename).",
+    )
+    parser.add_argument(
+        "--dataset-used",
+        default=None,
+        help="Dataset identifier for summary.json (defaults to input file stem).",
+    )
+    parser.add_argument(
+        "--model-used",
+        default="",
+        help="Model identifier for summary.json (optional).",
+    )
+    parser.add_argument(
+        "--additional-model-used",
+        action="append",
+        default=[],
+        help="Additional model identifier(s) for summary.json (repeatable).",
+    )
+    parser.add_argument(
+        "--notes",
+        default="",
+        help="Optional notes for summary.json.",
+    )
     return parser.parse_args()
 
 
@@ -80,85 +109,106 @@ def predict_from_scores(scores, threshold: float):
     return (scores < threshold).astype(int)
 
 
-def f1_at_max_fpr(y_true, scores, max_fpr: float = 0.0001) -> dict:
-    """Compute the best F1 among thresholds whose human false-positive rate is <= max_fpr."""
-    candidates = sorted(set(float(score) for score in scores))
-    if not candidates:
-        return {
-            "f1": None,
-            "threshold": None,
-            "max_fpr": max_fpr,
-            "actual_fpr": None,
-            "note": "No scores were available.",
-        }
-
-    # Add edge thresholds so all-human and all-AI predictions are considered.
-    epsilon = 1e-12
-    thresholds = [min(candidates) - epsilon]
-    thresholds.extend(score + epsilon for score in candidates)
-
-    best = None
-    for threshold in thresholds:
-        y_pred = predict_from_scores(scores, threshold)
-        tn, fp, fn, tp = confusion_matrix(y_true, y_pred, labels=[0, 1]).ravel()
-        actual_fpr = fp / (fp + tn) if (fp + tn) else 0.0
-        recall = tp / (tp + fn) if (tp + fn) else 0.0
-        f1 = f1_score(y_true, y_pred, pos_label=1, zero_division=0)
-
-        if actual_fpr > max_fpr:
-            continue
-
-        if best is None or (f1, recall, -actual_fpr) > (
-            best["f1"],
-            best["recall"],
-            -best["actual_fpr"],
-        ):
-            best = {
-                "f1": float(f1),
-                "threshold": float(threshold),
-                "max_fpr": float(max_fpr),
-                "actual_fpr": float(actual_fpr),
-                "recall": float(recall),
-            }
-
-    if best is None:
-        return {
-            "f1": None,
-            "threshold": None,
-            "max_fpr": float(max_fpr),
-            "actual_fpr": None,
-            "recall": None,
-            "note": "No threshold satisfied the target FPR.",
-        }
-
-    return best
-
-
-def compute_metrics(y_true, scores, threshold: float) -> dict:
-    y_pred = predict_from_scores(scores, threshold)
-    labels = [0, 1]
-    matrix = confusion_matrix(y_true, y_pred, labels=labels)
-
+def compute_auc_roc(y_true, scores) -> Optional[float]:
+    # For Binoculars, lower raw scores indicate stronger AI likelihood, so use -score for ROC/AUC.
     try:
-        roc_auc = float(roc_auc_score(y_true, -scores))
+        return float(roc_auc_score(y_true, -scores))
     except ValueError:
-        roc_auc = None
+        return None
 
-    tn, fp, fn, tp = matrix.ravel()
+
+def write_roc_curve(output_dir: Path, y_true, scores) -> None:
+    fpr, tpr, thresholds = roc_curve(y_true, -scores)
+    roc_df = pd.DataFrame({"fpr": fpr, "tpr": tpr, "threshold": thresholds})
+    roc_df.to_csv(output_dir / "roc_curve.csv", sep="\t", index=False)
+
+
+def select_threshold_max_f1_under_fpr(y_true, scores, max_fpr: float) -> Optional[float]:
+    """Select a score threshold that maximizes F1 subject to FPR <= max_fpr."""
+    scores_np = np.asarray(scores, dtype=float)
+    y_np = np.asarray(y_true, dtype=int)
+    if scores_np.size == 0:
+        return None
+
+    order = np.argsort(scores_np, kind="mergesort")
+    s = scores_np[order]
+    y = y_np[order]
+
+    is_pos = y == 1
+    is_neg = ~is_pos
+    num_pos = int(is_pos.sum())
+    num_neg = int(is_neg.sum())
+
+    cum_tp = np.cumsum(is_pos, dtype=np.int64)
+    cum_fp = np.cumsum(is_neg, dtype=np.int64)
+
+    unique_scores, first_idx = np.unique(s, return_index=True)
+    last_idx = np.r_[first_idx[1:] - 1, s.size - 1]
+
+    tps = cum_tp[last_idx].astype(float)
+    fps = cum_fp[last_idx].astype(float)
+
+    # Include the all-negative operating point (threshold below min score).
+    tps = np.r_[0.0, tps]
+    fps = np.r_[0.0, fps]
+
+    eps = 1e-12
+    thresholds = np.r_[float(s[0] - eps), (unique_scores + eps).astype(float)]
+
+    if num_neg > 0:
+        fpr = fps / float(num_neg)
+    else:
+        fpr = np.zeros_like(fps)
+
+    if num_pos > 0:
+        recall = tps / float(num_pos)
+    else:
+        recall = np.zeros_like(tps)
+
+    denom_prec = tps + fps
+    precision = np.divide(
+        tps,
+        denom_prec,
+        out=np.zeros_like(tps),
+        where=denom_prec > 0,
+    )
+    denom_f1 = precision + recall
+    f1 = np.divide(
+        2.0 * precision * recall,
+        denom_f1,
+        out=np.zeros_like(precision),
+        where=denom_f1 > 0,
+    )
+
+    valid = fpr <= (max_fpr + 1e-12)
+    if not np.any(valid):
+        return None
+
+    cand = np.where(valid)[0]
+    # Lexicographic max over (f1, recall, -fpr).
+    rank = np.lexsort((-fpr[cand], recall[cand], f1[cand]))
+    best = int(cand[rank[-1]])
+    return float(thresholds[best])
+
+
+def metrics_at_max_fpr(y_true, scores, max_fpr: float, auc_roc: Optional[float]) -> dict:
+    threshold = select_threshold_max_f1_under_fpr(y_true, scores, max_fpr=max_fpr)
+    if threshold is None:
+        return {
+            "f1": None,
+            "accuracy": None,
+            "precision": None,
+            "recall": None,
+            "auc_roc": auc_roc,
+        }
+
+    y_pred = predict_from_scores(scores, threshold)
     return {
+        "f1": float(f1_score(y_true, y_pred, pos_label=1, zero_division=0)),
         "accuracy": float(accuracy_score(y_true, y_pred)),
         "precision": float(precision_score(y_true, y_pred, pos_label=1, zero_division=0)),
         "recall": float(recall_score(y_true, y_pred, pos_label=1, zero_division=0)),
-        "f1": float(f1_score(y_true, y_pred, pos_label=1, zero_division=0)),
-        "f1_at_1pct_fpr": f1_at_max_fpr(y_true, scores, max_fpr=0.01),
-        "f1_at_0_01pct_fpr": f1_at_max_fpr(y_true, scores, max_fpr=0.0001),
-        "auc_roc": roc_auc,
-        "confusion_matrix": matrix.tolist(),
-        "confusion_matrix_labels": ["human", "ai"],
-        "true_negative": int(tn),
-        "false_positive": int(fp),
-        "false_negative": int(fn),
-        "true_positive": int(tp),
+        "auc_roc": auc_roc,
     }
 
 
@@ -188,32 +238,36 @@ def main() -> None:
     scored_df["prediction_text"] = scored_df["prediction"].map(prediction_text)
     scored_df.to_csv(args.output_dir / "scored_samples.csv", index=False)
 
-    metrics = compute_metrics(y_true, scored_df["score"], threshold)
+    matrix = confusion_matrix(y_true, scored_df["prediction"], labels=[0, 1])
     confusion_df = pd.DataFrame(
-        metrics["confusion_matrix"],
+        matrix.tolist(),
         index=["actual_human", "actual_ai"],
         columns=["predicted_human", "predicted_ai"],
     )
-    confusion_df.to_csv(args.output_dir / "confusion_matrix.csv")
+    confusion_df.to_csv(args.output_dir / "confusion_matrix.csv", index=False)
+
+    auc_roc = compute_auc_roc(y_true, scored_df["score"])
+    write_roc_curve(args.output_dir, y_true, scored_df["score"])
+
+    experiment_name = args.experiment_name or args.input.name
+    dataset_used = args.dataset_used or args.input.stem
 
     summary = {
-        "count": int(len(scored_df)),
-        "mode": args.mode,
-        "threshold": float(threshold),
-        **metrics,
-        # Report-friendly metric labels.
-        "F1@1%FPR": metrics["f1_at_1pct_fpr"]["f1"],
-        "F1@0.01%FPR": metrics["f1_at_0_01pct_fpr"]["f1"],
-        "Accuracy": metrics["accuracy"],
-        "Precision": metrics["precision"],
-        "Recall": metrics["recall"],
-        "AUC-ROC": metrics["auc_roc"],
-        "Confusion Matrix": metrics["confusion_matrix"],
-        # Backwards-compatible aliases used by earlier notebook versions.
-        "precision_ai": metrics["precision"],
-        "recall_ai": metrics["recall"],
-        "f1_ai": metrics["f1"],
-        "roc_auc": metrics["auc_roc"],
+        "experiment_name": experiment_name,
+        "detection_method": "Binoculars",
+        "model_used": args.model_used or "",
+        "dataset_used": dataset_used,
+        "num_samples": int(len(scored_df)),
+        "additional_details": {
+            "additional_models_used": list(args.additional_model_used),
+            "notes": args.notes or "",
+        },
+        "metrics_at_1pct_fpr": metrics_at_max_fpr(
+            y_true, scored_df["score"], max_fpr=0.01, auc_roc=auc_roc
+        ),
+        "metrics_at_0.1pct_fpr": metrics_at_max_fpr(
+            y_true, scored_df["score"], max_fpr=0.001, auc_roc=auc_roc
+        ),
     }
 
     with open(args.output_dir / "summary.json", "w") as f:
@@ -224,3 +278,4 @@ def main() -> None:
 
 if __name__ == "__main__":
     main()
+

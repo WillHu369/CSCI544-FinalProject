@@ -240,3 +240,6 @@ HC3-Recursive-Paraphrase/artifacts/checkpoints/*
 !HC3-Recursive-Paraphrase/artifacts/checkpoints/.gitkeep
 HC3-Recursive-Paraphrase/artifacts/api_calls/*
 !HC3-Recursive-Paraphrase/artifacts/api_calls/.gitkeep
+
+.DS_Store
+**/.DS_Store
