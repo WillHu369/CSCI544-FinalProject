@@ -23,6 +23,10 @@ METHODS: List[MethodSpec] = [
     MethodSpec("svm", "SVM"),
 ]
 
+VARIANT_LABELS = {
+    "original_clean": "Baseline 10000",
+}
+
 
 def repo_root() -> Path:
     return Path(__file__).resolve().parents[1]
@@ -271,7 +275,7 @@ def plot_metric(
     ax.set_title(title)
     ax.set_ylabel(ylabel)
     ax.set_xticks(x)
-    ax.set_xticklabels([v.replace("_", " ") for v in variants])
+    ax.set_xticklabels([VARIANT_LABELS.get(v, v.replace("_", " ")) for v in variants])
     ax.set_ylim(0.0, 1.02)
     ax.grid(axis="y", linestyle="--", linewidth=0.5, alpha=0.4)
     ax.legend(loc="lower center", bbox_to_anchor=(0.5, -0.28), ncol=3, frameon=False, fontsize=8)
