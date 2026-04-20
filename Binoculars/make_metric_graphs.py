@@ -172,6 +172,9 @@ def load_rows(metrics_dir: Path, variants: Iterable[str]) -> List[Dict[str, Any]
                     "tpr_at_1pct_fpr": metric_get(payload, "metrics_at_1pct_fpr", "tpr")
                     or metric_get(payload, "metrics_at_1pct_fpr", "recall"),
                     "f1_at_1pct_fpr": metric_get(payload, "metrics_at_1pct_fpr", "f1"),
+                    "auc_roc": metric_get(payload, "metrics_at_0.1pct_fpr", "auc_roc")
+                    or metric_get(payload, "metrics_at_1pct_fpr", "auc_roc")
+                    or metric_get(payload, "presentation_metrics", "roc_auc"),
                 }
             )
     return rows
@@ -191,6 +194,7 @@ def write_table(output_dir: Path, variants: List[str], rows: List[Dict[str, Any]
         "f1_at_0.1pct_fpr",
         "tpr_at_1pct_fpr",
         "f1_at_1pct_fpr",
+        "auc_roc",
         "num_samples",
         "path",
     ]
@@ -329,6 +333,18 @@ def main() -> None:
         filename_prefix="f1_at_0_1pct_fpr",
     )
     print(f"Wrote {f1_plot}")
+
+    auc_plot = plot_metric(
+        args.output_dir,
+        variants,
+        rows,
+        active_methods,
+        metric_key="auc_roc",
+        title="AUC-ROC",
+        ylabel="AUC-ROC",
+        filename_prefix="auc_roc",
+    )
+    print(f"Wrote {auc_plot}")
 
 
 if __name__ == "__main__":
