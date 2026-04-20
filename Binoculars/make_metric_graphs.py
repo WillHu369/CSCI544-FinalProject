@@ -202,6 +202,7 @@ def plot_metric(
     output_dir: Path,
     variants: List[str],
     rows: List[Dict[str, Any]],
+    active_methods: List[MethodSpec],
     metric_key: str,
     title: str,
     ylabel: str,
@@ -210,16 +211,16 @@ def plot_metric(
     import math
 
     import os
-    import matplotlib
-
     # Avoid ~/.matplotlib permission issues in some environments (e.g., Colab/sandboxes).
     os.environ.setdefault("MPLCONFIGDIR", str(Path("/tmp") / "matplotlib"))
+
+    import matplotlib
     matplotlib.use("Agg")
     import matplotlib.pyplot as plt
 
     output_dir.mkdir(parents=True, exist_ok=True)
 
-    methods = [m.label for m in METHODS]
+    methods = [m.label for m in active_methods]
     variant_to_method_value: Dict[str, Dict[str, Optional[float]]] = {}
     for variant in variants:
         variant_to_method_value[variant] = {m: None for m in methods}
@@ -238,15 +239,22 @@ def plot_metric(
     fig_w = max(6.5, 1.2 * len(variants))
     fig, ax = plt.subplots(figsize=(fig_w, 4.2), dpi=160)
 
-    # Deterministic palette.
+    # Deterministic palette keyed off the global METHODS list so colors stay consistent
+    # across different plots, even when some methods are missing for a variant.
     cmap = plt.get_cmap("tab10")
-    colors = [cmap(i % 10) for i in range(n_methods)]
+    method_to_color = {m.label: cmap(i % 10) for i, m in enumerate(METHODS)}
 
     for i, method in enumerate(methods):
         xs = [xi + offsets[i] for xi in x]
         ys = [variant_to_method_value[v].get(method) for v in variants]
         plot_ys = [0.0 if (y is None or (isinstance(y, float) and math.isnan(y))) else float(y) for y in ys]
-        bars = ax.bar(xs, plot_ys, width=bar_w, color=colors[i], label=method)
+        bars = ax.bar(
+            xs,
+            plot_ys,
+            width=bar_w,
+            color=method_to_color.get(method, cmap(i % 10)),
+            label=method,
+        )
         for bar, y in zip(bars, ys):
             if y is None or (isinstance(y, float) and math.isnan(y)):
                 continue
@@ -290,10 +298,15 @@ def main() -> None:
     table_path = write_table(args.output_dir, variants, rows)
     print(f"Wrote {table_path}")
 
+    # Use the same method ordering and color mapping across both plots.
+    present_method_keys = {row["method_key"] for row in rows}
+    active_methods = [m for m in METHODS if m.key in present_method_keys]
+
     tpr_plot = plot_metric(
         args.output_dir,
         variants,
         rows,
+        active_methods,
         metric_key="tpr_at_0.1pct_fpr",
         title="TPR @ 0.1% FPR",
         ylabel="TPR @ 0.1% FPR",
@@ -305,6 +318,7 @@ def main() -> None:
         args.output_dir,
         variants,
         rows,
+        active_methods,
         metric_key="f1_at_0.1pct_fpr",
         title="F1 @ 0.1% FPR",
         ylabel="F1 @ 0.1% FPR",
