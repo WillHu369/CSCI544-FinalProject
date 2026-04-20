@@ -2,6 +2,7 @@ import random
 import datasets
 import csv
 import json
+import os
 
 SEPARATOR = '<<<SEP>>>'
 
@@ -11,6 +12,7 @@ DATASETS = [
     'english',
     'german',
     'pubmed',
+    'avoidance_recursive_hc3',
     'hc3_all',
     'hc3_all_10000',
     'hc3_finance',
@@ -108,6 +110,54 @@ def _load_hc3_csv(hc3_path):
     random.shuffle(examples)
 
     return examples
+
+
+def _load_hc3_paired_csv(hc3_path):
+    pairs = []
+
+    with open(hc3_path, 'r', encoding='utf-8', errors='replace', newline='') as f:
+        reader = csv.DictReader(f)
+        for row in reader:
+            question = (row.get('question') or '').strip()
+            human_answers = _parse_hc3_answers(row.get('human_answers') or '[]')
+            ai_answers = _parse_hc3_answers(row.get('chatgpt_answers') or '[]')
+
+            if not human_answers or not ai_answers:
+                continue
+
+            for human_answer, ai_answer in zip(human_answers, ai_answers):
+                if question:
+                    human_text = process_spaces(f'Question: {question} Answer: {human_answer}')
+                    ai_text = process_spaces(f'Question: {question} Answer: {ai_answer}')
+                else:
+                    human_text = process_spaces(human_answer)
+                    ai_text = process_spaces(ai_answer)
+
+                if human_text and ai_text:
+                    pairs.append((human_text, ai_text))
+
+    random.seed(0)
+    random.shuffle(pairs)
+
+    return {
+        'original': [x[0] for x in pairs],
+        'sampled': [x[1] for x in pairs],
+    }
+
+
+def load_avoidance_recursive_hc3(cache_dir=None):
+    candidate_paths = [
+        'data/hc3/hc3_unified_10000_gpt54mini_depth3.csv',
+        'data/hc3/hc3_unified_short_gpt54mini_depth3.csv',
+    ]
+
+    for path in candidate_paths:
+        if os.path.exists(path):
+            return _load_hc3_paired_csv(path)
+
+    raise FileNotFoundError(
+        f'Could not find avoidance_recursive_hc3 CSV. Tried: {candidate_paths}'
+    )
 
 
 def load_hc3_all(cache_dir=None):
