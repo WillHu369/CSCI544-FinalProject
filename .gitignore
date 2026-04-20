@@ -240,3 +240,10 @@ HC3-Recursive-Paraphrase/artifacts/checkpoints/*
 !HC3-Recursive-Paraphrase/artifacts/checkpoints/.gitkeep
 HC3-Recursive-Paraphrase/artifacts/api_calls/*
 !HC3-Recursive-Paraphrase/artifacts/api_calls/.gitkeep
+
+# some semi_log scale code and outputs, just testing stuff
+DetectGPT-colab/semi_log_scale.py
+Metrics/DetectGPT/ROC_curve_csv/DetectGPT_openai-community_gpt2-large_hc3_all_semilog.csv
+Metrics/DetectGPT/ROC_curve_csv/DetectGPT_openai-community_gpt2-large_hc3_all_semilog.png
+Metrics/DetectGPT/ROC_curve_csv/DetectGPT_tiiuae_falcon-7b-instruct_hc3_all_semilog.csv
+Metrics/DetectGPT/ROC_curve_csv/DetectGPT_tiiuae_falcon-7b-instruct_hc3_all_semilog.png
