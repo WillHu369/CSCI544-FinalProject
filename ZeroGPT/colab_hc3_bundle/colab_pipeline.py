@@ -34,7 +34,7 @@ GPTZERO_MODEL_DIR = ARTIFACTS_DIR / "models" / "gptzero_like"
 BASELINE_RUN_DIR = ARTIFACTS_DIR / "runs" / "hc3_baselines_run"
 GPTZERO_RUN_DIR = ARTIFACTS_DIR / "runs" / "hc3_gptzero_run"
 REFERENCE_GPTZERO_METRICS_DIR = ARTIFACTS_DIR / "runs" / "hc3_gptzero_full_run" / "metrics"
-DEFAULT_COLAB_TARGET_FPRS = (0.01, 0.0001)
+DEFAULT_COLAB_TARGET_FPRS = (0.01, 0.001, 0.0001)
 TEST_DATASET_DIR = PROJECT_ROOT / "test_dataset"
 METRICS_SHARE_DIR = PROJECT_ROOT / "metrics_share"
 TEST_DATASET_SAMPLE_DIR = ARTIFACTS_DIR / "data" / "test_dataset_samples"
@@ -43,6 +43,7 @@ FILTERED_TRAINING_DATA_DIR = ARTIFACTS_DIR / "data" / "hc3_without_test_dataset"
 HC3_UNIFIED_TEST_FILENAME = "hc3_unified_10000_seed42_clean_test.csv"
 SHARED_METRIC_TARGETS = (
     (0.01, "metrics_at_1pct_fpr"),
+    (0.001, "metrics_at_0.1pct_fpr"),
     (0.0001, "metrics_at_0.01pct_fpr"),
 )
 
