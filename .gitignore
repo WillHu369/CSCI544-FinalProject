@@ -251,3 +251,7 @@ Metrics/DetectGPT/ROC_curve_csv/DetectGPT_openai-community_gpt2-large_hc3_all_se
 Metrics/DetectGPT/ROC_curve_csv/DetectGPT_openai-community_gpt2-large_hc3_all_semilog.png
 Metrics/DetectGPT/ROC_curve_csv/DetectGPT_tiiuae_falcon-7b-instruct_hc3_all_semilog.csv
 Metrics/DetectGPT/ROC_curve_csv/DetectGPT_tiiuae_falcon-7b-instruct_hc3_all_semilog.png
+
+# don't upload the files from the CSCI-544-FinalProject\CSCI544-FinalProject\DetectGPT-colab\data folder, as a copy exists already
+# in the dataset folder
+DetectGPT-colab/data/*
