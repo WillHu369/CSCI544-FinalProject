@@ -597,7 +597,11 @@ def generate_samples(raw_data, batch_size):
     for batch in range(len(raw_data) // batch_size):
         print('Generating samples for batch', batch, 'of', len(raw_data) // batch_size)
         original_text = raw_data[batch * batch_size:(batch + 1) * batch_size]
-        sampled_text = sample_from_model(original_text, min_words=30 if args.dataset in ['pubmed'] else 55)
+        sampled_text = sample_from_model(
+            original_text,
+            min_words=30 if args.dataset in ['pubmed'] else 55,
+            prompt_tokens=args.prompt_tokens,
+        )
 
         for o, s in zip(original_text, sampled_text):
             if args.dataset == 'pubmed':
@@ -620,7 +624,7 @@ def generate_samples(raw_data, batch_size):
 
 
 def generate_data(dataset, key):
-    if dataset == 'avoidance_recursive_hc3':
+    if dataset in ['avoidance_recursive_hc3', 'hc3_stylisticCleanup']:
         paired_data = custom_datasets.load(dataset, cache_dir)
 
         originals = [strip_newlines(x.strip()) for x in paired_data['original'] if isinstance(x, str)]
@@ -685,7 +689,7 @@ def generate_data(dataset, key):
     data = [strip_newlines(x) for x in data]
 
     # try to keep only examples with > 250 words
-    if dataset in ['writing', 'squad', 'xsum', 'hc3_all', 'hc3_all_10000', 'hc3_finance', 'hc3_medicine', 'hc3_qa', 'hc3_eli5', 'hc3_csai']:
+    if dataset in ['writing', 'squad', 'xsum', 'hc3_all', 'hc3_all_10000', 'hc3_finance', 'hc3_medicine', 'hc3_qa', 'hc3_eli5', 'hc3_csai', 'hc3_stylisticCleanup']:
         long_data = [x for x in data if len(x.split()) > 250]
         if len(long_data) > 0:
             data = long_data
@@ -805,6 +809,7 @@ if __name__ == '__main__':
     parser.add_argument('--batch_size', type=int, default=50)
     parser.add_argument('--chunk_size', type=int, default=20)
     parser.add_argument('--n_similarity_samples', type=int, default=20)
+    parser.add_argument('--prompt_tokens', type=int, default=30)
     parser.add_argument('--int8', action='store_true')
     parser.add_argument('--half', action='store_true')
     parser.add_argument('--base_half', action='store_true')
@@ -825,6 +830,9 @@ if __name__ == '__main__':
     parser.add_argument('--random_fills_tokens', action='store_true')
     parser.add_argument('--cache_dir', type=str, default="~/.cache")
     args = parser.parse_args()
+
+    if args.prompt_tokens <= 0:
+        raise ValueError("--prompt_tokens must be > 0")
 
     API_TOKEN_COUNTER = 0
 
@@ -867,6 +875,7 @@ if __name__ == '__main__':
     if not os.path.exists(cache_dir):
         os.makedirs(cache_dir)
     print(f"Using cache dir {cache_dir}")
+    print(f"Using prompt_tokens={args.prompt_tokens} for non-pubmed sample generation")
 
     GPT2_TOKENIZER = transformers.GPT2Tokenizer.from_pretrained('gpt2', cache_dir=cache_dir)
 

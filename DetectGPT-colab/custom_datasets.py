@@ -20,6 +20,7 @@ DATASETS = [
     'hc3_qa',
     'hc3_eli5',
     'hc3_csai',
+    'hc3_stylisticCleanup',
 ]
 
 
@@ -112,7 +113,7 @@ def _load_hc3_csv(hc3_path):
     return examples
 
 
-def _load_hc3_paired_csv(hc3_path):
+def _load_hc3_avoidance_technique_loader(hc3_path):
     pairs = []
 
     with open(hc3_path, 'r', encoding='utf-8', errors='replace', newline='') as f:
@@ -147,13 +148,12 @@ def _load_hc3_paired_csv(hc3_path):
 
 def load_avoidance_recursive_hc3(cache_dir=None):
     candidate_paths = [
-        'data/hc3/hc3_unified_10000_gpt54mini_depth3.csv',
-        'data/hc3/hc3_unified_short_gpt54mini_depth3.csv',
+        'data/hc3/hc3_unified_10000_gpt54mini_depth3.csv'
     ]
 
     for path in candidate_paths:
         if os.path.exists(path):
-            return _load_hc3_paired_csv(path)
+            return _load_hc3_avoidance_technique_loader(path)
 
     raise FileNotFoundError(
         f'Could not find avoidance_recursive_hc3 CSV. Tried: {candidate_paths}'
@@ -186,6 +186,10 @@ def load_hc3_eli5(cache_dir=None):
 
 def load_hc3_csai(cache_dir=None):
     return _load_hc3_csv('data/hc3/hc3_wiki_csai_200_seed42.csv')
+
+
+def load_hc3_stylisticCleanup(cache_dir=None):
+    return _load_hc3_avoidance_technique_loader('data/hc3/hc3_stylisticCleanup_10000.csv')
 
 
 def load_language(language, cache_dir):
