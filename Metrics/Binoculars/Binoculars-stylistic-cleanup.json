@@ -1,0 +1,30 @@
+{
+  "experiment_name": "Binoculars HC3 evaluation 1",
+  "detection_method": "Binoculars",
+  "model_used": "tiiuae/falcon-7b + tiiuae/falcon-7b-instruct",
+  "dataset_used": "hc3_stylistic_cleanup_10000_clean_test",
+  "num_samples": 31708,
+  "additional_details": {
+    "additional_models_used": [
+      "tiiuae/falcon-7b",
+      "tiiuae/falcon-7b-instruct"
+    ],
+    "notes": "Zero-shot Binoculars detector using the configured threshold mode."
+  },
+  "metrics_at_1pct_fpr": {
+    "f1": 0.956856867573065,
+    "accuracy": 0.9745805474959001,
+    "precision": 0.9765104337375724,
+    "recall": 0.9379788015531535,
+    "tpr": 0.9379788015531535,
+    "auc_roc": 0.9966420100044528
+  },
+  "metrics_at_0.1pct_fpr": {
+    "f1": 0.6910162406633318,
+    "accuracy": 0.857796139775451,
+    "precision": 0.9956556082148499,
+    "recall": 0.5291216287123518,
+    "tpr": 0.5291216287123518,
+    "auc_roc": 0.9966420100044528
+  }
+}
