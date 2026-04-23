@@ -1,0 +1,29 @@
+{
+  "experiment_name": "perturbation_20_d_results.json",
+  "detection_method": "DetectGPT",
+  "model_used": "gpt2-medium",
+  "dataset_used": "hc3_stylisticCleanup",
+  "num_samples": 8090,
+  "additional_details": {
+    "additional_models_used": [
+      "t5-large"
+    ],
+    "notes": ""
+  },
+  "metrics_at_1pct_fpr": {
+    "f1": 0.05476190476190476,
+    "accuracy": 0.5092707045735476,
+    "precision": 0.7419354838709677,
+    "recall": 0.02843016069221261,
+    "tpr": 0.02843016069221261,
+    "auc_roc": 0.7697597027262824
+  },
+  "metrics_at_0.1pct_fpr": {
+    "f1": 0.011784925116621655,
+    "accuracy": 0.5024721878862793,
+    "precision": 0.8571428571428571,
+    "recall": 0.005933250927070457,
+    "tpr": 0.005933250927070457,
+    "auc_roc": 0.7697597027262824
+  }
+}
