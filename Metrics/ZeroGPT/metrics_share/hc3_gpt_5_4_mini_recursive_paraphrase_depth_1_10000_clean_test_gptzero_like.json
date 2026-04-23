@@ -1,0 +1,42 @@
+{
+  "additional_details": {
+    "additional_models_used": [
+      "/content/drive/MyDrive/colab_hc3_bundle/hf_models/gpt2"
+    ],
+    "notes": "Exported from ZeroGPT Colab evaluation on test_dataset."
+  },
+  "dataset_used": "hc3_gpt_5_4_mini_recursive_paraphrase_depth_1_10000_clean_test.csv",
+  "detection_method": "gptzero_like",
+  "experiment_name": "hc3_gpt_5_4_mini_recursive_paraphrase_depth_1_10000_clean_test_gptzero_like",
+  "metrics_at_0.01pct_fpr": {
+    "accuracy": 0.6657062285434037,
+    "auc_roc": 0.9366465765908398,
+    "f1": 0.0007330034817665,
+    "precision": 0.8,
+    "recall": 0.0003666697222476,
+    "tpr": 0.0003666697222476
+  },
+  "metrics_at_0.1pct_fpr": {
+    "accuracy": 0.6675760176557136,
+    "auc_roc": 0.9366465765908398,
+    "f1": 0.015254698992100062,
+    "precision": 0.8076923076923089,
+    "recall": 0.007700064167201299,
+    "tpr": 0.007700064167201299
+  },
+  "metrics_at_1pct_fpr": {
+    "accuracy": 0.7265203531142717,
+    "auc_roc": 0.9366465765908398,
+    "f1": 0.3305822328931572,
+    "precision": 0.9107069036792064,
+    "recall": 0.2019433495279127,
+    "tpr": 0.2019433495279127
+  },
+  "model_used": "gptzero_like_logistic_regression",
+  "num_samples": 32624,
+  "presentation_metrics": {
+    "fpr_at_80pct_tpr": 0.0937140225650472,
+    "roc_auc": 0.9366465765908398,
+    "tpr_at_0_1pct_fpr": 0.007700064167201299
+  }
+}

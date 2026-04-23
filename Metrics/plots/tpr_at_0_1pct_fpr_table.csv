@@ -1,0 +1,22 @@
+dataset_group,dataset_label,detector_key,detector_label,tpr_at_0_1pct_fpr
+original_clean,Original clean,binoculars,Binoculars,0.6112841179703242
+original_clean,Original clean,detectgpt_gpt2,DetectGPT (GPT-2),0.00536480686695279
+original_clean,Original clean,detectgpt_falcon,DetectGPT (Falcon-7B),0.0
+original_clean,Original clean,detectgpt_falcon_instruct,DetectGPT (Falcon-Instruct),0.000536480686695279
+original_clean,Original clean,gptzero,GPTZero,0.5038958657988817
+original_clean,Original clean,xgb,XGB,0.8492987441562013
+original_clean,Original clean,svm,SVM,0.9369328077733982
+stylistic_cleanup,Stylistic cleanup,binoculars,Binoculars,
+stylistic_cleanup,Stylistic cleanup,detectgpt_gpt2,DetectGPT (GPT-2),
+stylistic_cleanup,Stylistic cleanup,detectgpt_falcon,DetectGPT (Falcon-7B),
+stylistic_cleanup,Stylistic cleanup,detectgpt_falcon_instruct,DetectGPT (Falcon-Instruct),
+stylistic_cleanup,Stylistic cleanup,gptzero,GPTZero,0.5405603945849512
+stylistic_cleanup,Stylistic cleanup,xgb,XGB,0.8769020883618428
+stylistic_cleanup,Stylistic cleanup,svm,SVM,0.9542449365096024
+recursive_paraphrase_depth_3,Paraphrase depth 3,binoculars,Binoculars,
+recursive_paraphrase_depth_3,Paraphrase depth 3,detectgpt_gpt2,DetectGPT (GPT-2),
+recursive_paraphrase_depth_3,Paraphrase depth 3,detectgpt_falcon,DetectGPT (Falcon-7B),
+recursive_paraphrase_depth_3,Paraphrase depth 3,detectgpt_falcon_instruct,DetectGPT (Falcon-Instruct),
+recursive_paraphrase_depth_3,Paraphrase depth 3,gptzero,GPTZero,0.0056828597616865
+recursive_paraphrase_depth_3,Paraphrase depth 3,xgb,XGB,0.5638863428047662
+recursive_paraphrase_depth_3,Paraphrase depth 3,svm,SVM,0.3565536205316224

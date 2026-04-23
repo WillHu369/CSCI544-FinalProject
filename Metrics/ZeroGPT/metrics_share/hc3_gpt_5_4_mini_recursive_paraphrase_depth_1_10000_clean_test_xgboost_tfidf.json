@@ -1,0 +1,40 @@
+{
+  "additional_details": {
+    "additional_models_used": [],
+    "notes": "Exported from ZeroGPT Colab evaluation on test_dataset."
+  },
+  "dataset_used": "hc3_gpt_5_4_mini_recursive_paraphrase_depth_1_10000_clean_test.csv",
+  "detection_method": "xgboost_tfidf",
+  "experiment_name": "hc3_gpt_5_4_mini_recursive_paraphrase_depth_1_10000_clean_test_xgboost_tfidf",
+  "metrics_at_0.01pct_fpr": {
+    "accuracy": 0.7667667974497303,
+    "auc_roc": 0.996061156254512,
+    "f1": 0.4646450432702455,
+    "precision": 0.9993946731234868,
+    "recall": 0.3026858557154643,
+    "tpr": 0.3026858557154643
+  },
+  "metrics_at_0.1pct_fpr": {
+    "accuracy": 0.8618195193722414,
+    "auc_roc": 0.996061156254512,
+    "f1": 0.7402028584601199,
+    "precision": 0.996740648766103,
+    "recall": 0.5886882390686589,
+    "tpr": 0.5886882390686589
+  },
+  "metrics_at_1pct_fpr": {
+    "accuracy": 0.9562285434036292,
+    "auc_roc": 0.996061156254512,
+    "f1": 0.9314252785247792,
+    "precision": 0.9781139687342412,
+    "recall": 0.8889907415895133,
+    "tpr": 0.8889907415895133
+  },
+  "model_used": "xgboost_tfidf",
+  "num_samples": 32624,
+  "presentation_metrics": {
+    "fpr_at_80pct_tpr": 0.0043288049735206,
+    "roc_auc": 0.996061156254512,
+    "tpr_at_0_1pct_fpr": 0.5886882390686589
+  }
+}

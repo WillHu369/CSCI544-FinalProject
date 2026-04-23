@@ -1,0 +1,8 @@
+dataset_group,dataset_label,detector_key,detector_label,tpr_at_0_1pct_fpr
+original_clean,Original clean,binoculars,Binoculars,0.6112841179703242
+original_clean,Original clean,detectgpt_gpt2,DetectGPT (GPT-2),0.00536480686695279
+original_clean,Original clean,detectgpt_falcon,DetectGPT (Falcon-7B),0.0
+original_clean,Original clean,detectgpt_falcon_instruct,DetectGPT (Falcon-Instruct),0.000536480686695279
+original_clean,Original clean,gptzero,GPTZero,0.5038958657988817
+original_clean,Original clean,xgb,XGB,0.8492987441562013
+original_clean,Original clean,svm,SVM,0.9369328077733982
