@@ -26,6 +26,9 @@ METHODS: List[MethodSpec] = [
 VARIANT_LABELS = {
     "original_clean": "Baseline 10000",
     "stylistic_cleanup": "Stylistic Cleanup 10000",
+    # Depth-3 recursive paraphrase is what we currently treat as "paraphrasing".
+    "paraphrasing": "Paraphrasing 10000",
+    "recursive_paraphrase_depth_3": "Paraphrasing 10000",
 }
 
 
@@ -35,12 +38,12 @@ def repo_root() -> Path:
 
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(
-        description="Create TPR@0.1%FPR and F1@0.1%FPR comparison plots from Metrics/*.json files."
+        description="Create TPR/F1/AUC comparison plots from Metrics/*.json files."
     )
     parser.add_argument(
         "--variants",
         default="original_clean",
-        help="Comma-separated variants to plot (e.g. original_clean,stylistic_cleanup). Default: original_clean",
+        help="Comma-separated variants to plot (e.g. original_clean,stylistic_cleanup,paraphrasing).",
     )
     parser.add_argument(
         "--metrics-dir",
@@ -130,9 +133,10 @@ def method_paths(metrics_dir: Path, variant: str) -> Dict[str, Path]:
             }
         )
 
-    if variant == "recursive_paraphrase_depth_3":
+    if variant in {"recursive_paraphrase_depth_3", "paraphrasing"}:
         paths.update(
             {
+                "binoculars": metrics_dir / "Binoculars" / "Binoculars-paraphrasing.json",
                 "gptzero": metrics_dir
                 / "metrics_XGB_SVM_GPTZERO"
                 / "recursive_paraphrase_depth_3"
@@ -218,12 +222,12 @@ def plot_metric(
     filename_prefix: str,
 ) -> Path:
     import math
-
     import os
-    # Avoid ~/.matplotlib permission issues in some environments (e.g., Colab/sandboxes).
+
     os.environ.setdefault("MPLCONFIGDIR", str(Path("/tmp") / "matplotlib"))
 
     import matplotlib
+
     matplotlib.use("Agg")
     import matplotlib.pyplot as plt
 
@@ -248,8 +252,6 @@ def plot_metric(
     fig_w = max(6.5, 1.2 * len(variants))
     fig, ax = plt.subplots(figsize=(fig_w, 4.2), dpi=160)
 
-    # Deterministic palette keyed off the global METHODS list so colors stay consistent
-    # across different plots, even when some methods are missing for a variant.
     cmap = plt.get_cmap("tab10")
     method_to_color = {m.label: cmap(i % 10) for i, m in enumerate(METHODS)}
 
@@ -274,7 +276,6 @@ def plot_metric(
                 ha="center",
                 va="bottom",
                 fontsize=7,
-                rotation=0,
             )
 
     ax.set_title(title)
@@ -307,7 +308,6 @@ def main() -> None:
     table_path = write_table(args.output_dir, variants, rows)
     print(f"Wrote {table_path}")
 
-    # Use the same method ordering and color mapping across both plots.
     present_method_keys = {row["method_key"] for row in rows}
     active_methods = [m for m in METHODS if m.key in present_method_keys]
 
@@ -350,3 +350,4 @@ def main() -> None:
 
 if __name__ == "__main__":
     main()
+

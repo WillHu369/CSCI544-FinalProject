@@ -21,7 +21,7 @@ def parse_args() -> argparse.Namespace:
     )
     parser.add_argument(
         "--variant",
-        choices=["original_clean", "stylistic_cleanup"],
+        choices=["original_clean", "stylistic_cleanup", "paraphrasing"],
         default="original_clean",
         help="Dataset variant to plot (default: original_clean).",
     )
@@ -45,6 +45,8 @@ def read_roc_csv(path: Path, sep: str = ",") -> Tuple["pd.Series", "pd.Series"]:
 def load_binoculars(metrics_dir: Path, variant: str) -> Optional[Tuple["pd.Series", "pd.Series"]]:
     if variant == "stylistic_cleanup":
         path = metrics_dir / "Binoculars" / "Binoculars-stylistic-cleanup.csv"
+    elif variant == "paraphrasing":
+        path = metrics_dir / "Binoculars" / "Binoculars-paraphrasing.csv"
     else:
         path = metrics_dir / "Binoculars" / "Binoculars-10000.csv"
     if not path.exists():
@@ -72,8 +74,7 @@ def load_detectgpt(metrics_dir: Path) -> Dict[str, Tuple["pd.Series", "pd.Series
             "DetectGPT_tiiuae_falcon-7b-instruct_hc3_all.csv",
         ),
     }
-    for label, filename in mapping.items():
-        pretty, file = filename
+    for _, (pretty, file) in mapping.items():
         path = roc_dir / file
         if not path.exists():
             continue
@@ -130,6 +131,7 @@ def main() -> None:
     variant_to_dataset_name = {
         "original_clean": "hc3_unified_10000_seed42_clean_test",
         "stylistic_cleanup": "hc3_stylistic_cleanup_10000_clean_test",
+        "paraphrasing": "hc3_gpt_5_4_mini_recursive_paraphrase_depth_3_10000_clean_test",
     }
     dataset_name = variant_to_dataset_name[args.variant]
 
@@ -166,7 +168,6 @@ def main() -> None:
     if not curves:
         raise SystemExit("No ROC curve sources found under Metrics/.")
 
-    # Color map consistent with our other plots.
     method_order = [
         "DetectGPT (GPT2-Large)",
         "DetectGPT (Falcon-7B)",
@@ -180,8 +181,6 @@ def main() -> None:
     color_by_label = {label: cmap(i % 10) for i, label in enumerate(method_order)}
 
     fig, ax = plt.subplots(figsize=(6.8, 5.2), dpi=180)
-
-    # Chance line.
     ax.plot([0, 1], [0, 1], linestyle="--", linewidth=1.0, color="0.6", label="Chance")
 
     for label in method_order:
@@ -196,7 +195,6 @@ def main() -> None:
             label=label,
         )
 
-    # Add anything else we found but didn't know about.
     for label, (fpr, tpr) in curves.items():
         if label in method_order:
             continue
@@ -204,7 +202,12 @@ def main() -> None:
 
     ax.set_xlabel("False Positive Rate (FPR)")
     ax.set_ylabel("True Positive Rate (TPR)")
-    title = "ROC Curves (Baseline 10000)" if args.variant == "original_clean" else "ROC Curves (Stylistic Cleanup 10000)"
+    if args.variant == "original_clean":
+        title = "ROC Curves (Baseline 10000)"
+    elif args.variant == "stylistic_cleanup":
+        title = "ROC Curves (Stylistic Cleanup 10000)"
+    else:
+        title = "ROC Curves (Paraphrasing 10000)"
     ax.set_title(title)
     ax.set_xlim(0.0, 1.0)
     ax.set_ylim(0.0, 1.0)
@@ -225,3 +228,4 @@ def main() -> None:
 
 if __name__ == "__main__":
     main()
+
