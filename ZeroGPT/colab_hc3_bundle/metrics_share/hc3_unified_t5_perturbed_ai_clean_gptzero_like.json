@@ -1,0 +1,42 @@
+{
+  "additional_details": {
+    "additional_models_used": [
+      "/content/drive/MyDrive/colab_hc3_bundle/hf_models/gpt2"
+    ],
+    "notes": "Exported from ZeroGPT Colab evaluation on test_dataset."
+  },
+  "dataset_used": "hc3_unified_t5_perturbed_ai_clean.csv",
+  "detection_method": "gptzero_like",
+  "experiment_name": "hc3_unified_t5_perturbed_ai_clean_gptzero_like",
+  "metrics_at_0.01pct_fpr": {
+    "accuracy": 0.6691086316821971,
+    "auc_roc": 0.991938137591779,
+    "f1": 0.021039267253106,
+    "precision": 0.9830508474576272,
+    "recall": 0.0106334219451828,
+    "tpr": 0.0106334219451828
+  },
+  "metrics_at_0.1pct_fpr": {
+    "accuracy": 0.7950282000980873,
+    "auc_roc": 0.991938137591779,
+    "f1": 0.5592829367956238,
+    "precision": 0.9950750469043153,
+    "recall": 0.3889449078742323,
+    "tpr": 0.3889449078742323
+  },
+  "metrics_at_1pct_fpr": {
+    "accuracy": 0.971462726826876,
+    "auc_roc": 0.991938137591779,
+    "f1": 0.9563259370455504,
+    "precision": 0.9793428132205996,
+    "recall": 0.9343661197176644,
+    "tpr": 0.9343661197176644
+  },
+  "model_used": "gptzero_like_logistic_regression",
+  "num_samples": 32624,
+  "presentation_metrics": {
+    "fpr_at_80pct_tpr": 0.003177527055031,
+    "roc_auc": 0.991938137591779,
+    "tpr_at_0_1pct_fpr": 0.3889449078742323
+  }
+}
