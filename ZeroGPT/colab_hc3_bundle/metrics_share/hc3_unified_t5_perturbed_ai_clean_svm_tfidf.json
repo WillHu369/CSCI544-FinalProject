@@ -1,0 +1,40 @@
+{
+  "additional_details": {
+    "additional_models_used": [],
+    "notes": "Exported from ZeroGPT Colab evaluation on test_dataset."
+  },
+  "dataset_used": "hc3_unified_t5_perturbed_ai_clean.csv",
+  "detection_method": "svm_tfidf",
+  "experiment_name": "hc3_unified_t5_perturbed_ai_clean_svm_tfidf",
+  "metrics_at_0.01pct_fpr": {
+    "accuracy": 0.9395230505149584,
+    "auc_roc": 0.998986757232878,
+    "f1": 0.900599526424505,
+    "precision": 0.9997762863534676,
+    "recall": 0.819323494362453,
+    "tpr": 0.819323494362453
+  },
+  "metrics_at_0.1pct_fpr": {
+    "accuracy": 0.9702979401667484,
+    "auc_roc": 0.998986757232878,
+    "f1": 0.9536163898329424,
+    "precision": 0.9978962131837308,
+    "recall": 0.9130992758272986,
+    "tpr": 0.9130992758272986
+  },
+  "metrics_at_1pct_fpr": {
+    "accuracy": 0.9893330063756745,
+    "auc_roc": 0.998986757232878,
+    "f1": 0.984106686152722,
+    "precision": 0.980613452261764,
+    "recall": 0.9876248968741406,
+    "tpr": 0.9876248968741406
+  },
+  "model_used": "linear_svm_tfidf",
+  "num_samples": 32624,
+  "presentation_metrics": {
+    "fpr_at_80pct_tpr": 0.0,
+    "roc_auc": 0.998986757232878,
+    "tpr_at_0_1pct_fpr": 0.9130992758272986
+  }
+}

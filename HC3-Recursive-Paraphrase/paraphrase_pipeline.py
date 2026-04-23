@@ -9,6 +9,7 @@ import importlib
 import json
 import math
 import os
+import re
 import sys
 import time
 from collections import Counter
@@ -54,11 +55,23 @@ DEFAULT_REQUEST_DELAY_SECONDS = 0.0
 DEFAULT_MAX_RETRIES = 5
 DEFAULT_MAX_OUTPUT_TOKENS = 512
 DEFAULT_TEMPERATURE = 0.7
+DEFAULT_QUALITY_CHECK_DEPTH = 3
+DEFAULT_QUALITY_MIN_SCORE = 3
+QUALITY_CHECK_MAX_OUTPUT_TOKENS = 128
+QUALITY_CHECK_ESTIMATED_OUTPUT_TOKENS = 64
 PRICING_VERIFIED_AT = "2026-04-13"
 PRICING_SOURCE_URL = "https://openai.com/api/pricing/"
 
 PARAPHRASE_ATTACK_NAME = "openai_recursive_paraphrase"
 PARAPHRASE_VARIANT_PREFIX = "recursive_paraphrase_depth_"
+QUALITY_STATEMENT = "This document was a high quality piece of text."
+LIKERT_SCORE_LABELS = {
+    1: "Strongly Disagree",
+    2: "Disagree",
+    3: "Neutral / Neither Agree nor Disagree",
+    4: "Agree",
+    5: "Strongly Agree",
+}
 HC3_UNIFIED_COLUMNS = ("hc3_row_id", "source", "question", "human_answers", "chatgpt_answers")
 HC3_FINAL_EXPORT_FILES = ("full.csv",)
 HC3_STALE_SPLIT_EXPORT_FILES = ("train.csv", "val.csv", "test.csv")
@@ -166,6 +179,9 @@ class ParaphraseRecord:
     incremental_usage_by_depth: dict[int, UsageTotals] = field(default_factory=dict)
     cumulative_usage_by_depth: dict[int, UsageTotals] = field(default_factory=dict)
     response_ids_by_depth: dict[int, str | None] = field(default_factory=dict)
+    quality_checks_by_depth: dict[int, dict[str, Any]] = field(default_factory=dict)
+    quality_usage_by_depth: dict[int, UsageTotals] = field(default_factory=dict)
+    quality_response_ids_by_depth: dict[int, str | None] = field(default_factory=dict)
 
     @classmethod
     def from_dict(cls, payload: dict[str, Any]) -> "ParaphraseRecord":
@@ -184,6 +200,18 @@ class ParaphraseRecord:
                 int(key): None if value is None else str(value)
                 for key, value in (payload.get("response_ids_by_depth") or {}).items()
             },
+            quality_checks_by_depth={
+                int(key): dict(value) if isinstance(value, dict) else {"raw_value": value}
+                for key, value in (payload.get("quality_checks_by_depth") or {}).items()
+            },
+            quality_usage_by_depth={
+                int(key): UsageTotals.from_dict(value)
+                for key, value in (payload.get("quality_usage_by_depth") or {}).items()
+            },
+            quality_response_ids_by_depth={
+                int(key): None if value is None else str(value)
+                for key, value in (payload.get("quality_response_ids_by_depth") or {}).items()
+            },
         )
 
     def to_dict(self) -> dict[str, Any]:
@@ -198,6 +226,15 @@ class ParaphraseRecord:
             },
             "response_ids_by_depth": {
                 str(key): value for key, value in sorted(self.response_ids_by_depth.items())
+            },
+            "quality_checks_by_depth": {
+                str(key): value for key, value in sorted(self.quality_checks_by_depth.items())
+            },
+            "quality_usage_by_depth": {
+                str(key): value.to_dict() for key, value in sorted(self.quality_usage_by_depth.items())
+            },
+            "quality_response_ids_by_depth": {
+                str(key): value for key, value in sorted(self.quality_response_ids_by_depth.items())
             },
         }
 
@@ -381,6 +418,19 @@ def parse_depths(values: list[str] | None) -> list[int]:
             if depth not in depths:
                 depths.append(depth)
     return sorted(depths or list(DEFAULT_DEPTHS))
+
+
+def resolve_quality_check_depth(depths: list[int], requested_depth: int | None) -> int | None:
+    if requested_depth is None or requested_depth <= 0:
+        return None
+    if requested_depth not in depths:
+        return None
+    return requested_depth
+
+
+def validate_quality_min_score(value: int) -> None:
+    if value < 1 or value > 5:
+        raise ValueError("--quality-min-score must be between 1 and 5.")
 
 
 def parse_model_pricing(values: list[str] | None) -> dict[str, PricingEntry]:
@@ -1012,6 +1062,111 @@ def build_paraphrase_prompt(*, question: str, answer: str, domain: str, prompt_p
     ).strip()
 
 
+def build_quality_check_prompt(text: str) -> str:
+    scale_lines = [LIKERT_SCORE_LABELS[score] for score in range(1, 6)]
+    return "\n".join(
+        [
+            "Evaluate the document against the statement and Likert scale below.",
+            "",
+            f'Statement: "{QUALITY_STATEMENT}"',
+            *scale_lines,
+            "",
+            "Use this numeric mapping in your answer:",
+            "1 = Strongly Disagree",
+            "2 = Disagree",
+            "3 = Neutral / Neither Agree nor Disagree",
+            "4 = Agree",
+            "5 = Strongly Agree",
+            "",
+            'Return JSON only with these keys: "score", "label", and "reason".',
+            "The score must be an integer from 1 to 5, and the label must be one of the five labels above.",
+            "",
+            "Document:",
+            text.strip(),
+        ]
+    ).strip()
+
+
+def normalize_likert_label(value: Any) -> str:
+    return re.sub(r"[^a-z0-9]+", " ", str(value).lower()).strip()
+
+
+def score_from_likert_label(value: Any) -> int | None:
+    normalized = normalize_likert_label(value)
+    label_lookup = {normalize_likert_label(label): score for score, label in LIKERT_SCORE_LABELS.items()}
+    label_lookup["neutral"] = 3
+    label_lookup["neither agree nor disagree"] = 3
+    return label_lookup.get(normalized)
+
+
+def parse_quality_check_response(output_text: str) -> dict[str, Any]:
+    text = output_text.strip()
+    payload: dict[str, Any] = {}
+    if text:
+        try:
+            payload = json.loads(text)
+        except json.JSONDecodeError:
+            start = text.find("{")
+            end = text.rfind("}")
+            if start >= 0 and end > start:
+                try:
+                    payload = json.loads(text[start : end + 1])
+                except json.JSONDecodeError:
+                    payload = {}
+
+    score: int | None = None
+    raw_score = payload.get("score") or payload.get("rating") or payload.get("likert_score")
+    if raw_score is not None:
+        match = re.search(r"\b([1-5])\b", str(raw_score))
+        if match:
+            score = int(match.group(1))
+
+    raw_label = payload.get("label") or payload.get("answer") or payload.get("choice")
+    if score is None and raw_label is not None:
+        score = score_from_likert_label(raw_label)
+
+    if score is None:
+        match = re.search(r"\b([1-5])\b", text)
+        if match:
+            score = int(match.group(1))
+
+    if score is None:
+        for label_score, label in LIKERT_SCORE_LABELS.items():
+            if normalize_likert_label(label) in normalize_likert_label(text):
+                score = label_score
+                break
+
+    if score is None or score < 1 or score > 5:
+        raise ValueError(f"Could not parse a 1-5 Likert quality score from: {output_text!r}")
+
+    label = str(raw_label or LIKERT_SCORE_LABELS[score])
+    if score_from_likert_label(label) is None:
+        label = LIKERT_SCORE_LABELS[score]
+
+    return {
+        "score": score,
+        "label": label,
+        "reason": str(payload.get("reason") or "").strip(),
+        "raw_output": output_text,
+    }
+
+
+def build_quality_check_result(output_text: str, *, min_score: int) -> dict[str, Any]:
+    parsed = parse_quality_check_response(output_text)
+    score = int(parsed["score"])
+    return {
+        "statement": QUALITY_STATEMENT,
+        "scale": {str(score): label for score, label in LIKERT_SCORE_LABELS.items()},
+        "score": score,
+        "label": parsed["label"],
+        "reason": parsed["reason"],
+        "min_score": min_score,
+        "passed": score >= min_score,
+        "checked_at": utc_now_iso(),
+        "raw_output": parsed["raw_output"],
+    }
+
+
 def estimate_usage_for_frame(frame: pd.DataFrame, *, prompt_prefix: str) -> UsageTotals:
     ai_rows = frame.loc[frame["label"].astype(str) == "ai"]
     usage = UsageTotals()
@@ -1029,6 +1184,18 @@ def estimate_usage_for_frame(frame: pd.DataFrame, *, prompt_prefix: str) -> Usag
     return usage
 
 
+def estimate_quality_check_usage_for_frame(frame: pd.DataFrame) -> UsageTotals:
+    ai_rows = frame.loc[frame["label"].astype(str) == "ai"]
+    usage = UsageTotals()
+    usage.requests = int(len(ai_rows))
+    for row in ai_rows.itertuples(index=False):
+        prompt = build_quality_check_prompt(str(row.text))
+        usage.input_tokens += estimate_tokens(prompt)
+        usage.output_tokens += QUALITY_CHECK_ESTIMATED_OUTPUT_TOKENS
+    usage.total_tokens = usage.input_tokens + usage.output_tokens
+    return usage
+
+
 def build_estimate_report(
     frame: pd.DataFrame,
     *,
@@ -1038,8 +1205,13 @@ def build_estimate_report(
     sample_selection: dict[str, Any],
     source_summary: dict[str, Any],
     prompt_prefix: str,
+    quality_check_depth: int | None,
+    quality_min_score: int,
 ) -> dict[str, Any]:
     base_usage = estimate_usage_for_frame(frame, prompt_prefix=prompt_prefix)
+    quality_usage = UsageTotals()
+    if quality_check_depth is not None:
+        quality_usage = estimate_quality_check_usage_for_frame(frame)
     requested_max_depth = max(depths)
     models_payload: dict[str, Any] = {}
 
@@ -1059,11 +1231,23 @@ def build_estimate_report(
                 output_tokens=base_usage.output_tokens,
                 total_tokens=base_usage.total_tokens,
             )
+            incremental_paraphrase_usage = incremental_usage.copy()
+            cumulative_paraphrase_usage = cumulative_usage.copy()
+            depth_quality_usage = UsageTotals()
+            if quality_check_depth is not None and depth == quality_check_depth:
+                depth_quality_usage = quality_usage.copy()
+                incremental_usage.add(depth_quality_usage)
+            if quality_check_depth is not None and depth >= quality_check_depth:
+                cumulative_usage.add(quality_usage)
             depth_payload[str(depth)] = {
                 "incremental_usage": incremental_usage.to_dict(),
                 "cumulative_usage": cumulative_usage.to_dict(),
+                "paraphrase_incremental_usage": incremental_paraphrase_usage.to_dict(),
+                "paraphrase_cumulative_usage": cumulative_paraphrase_usage.to_dict(),
+                "quality_check_usage": depth_quality_usage.to_dict(),
                 "estimated_incremental_cost_usd": None if pricing is None else round(pricing.estimate_cost(incremental_usage), 6),
                 "estimated_cumulative_cost_usd": None if pricing is None else round(pricing.estimate_cost(cumulative_usage), 6),
+                "estimated_quality_check_cost_usd": None if pricing is None else round(pricing.estimate_cost(depth_quality_usage), 6),
             }
 
         run_total_usage = UsageTotals(
@@ -1072,9 +1256,18 @@ def build_estimate_report(
             output_tokens=base_usage.output_tokens * requested_max_depth,
             total_tokens=base_usage.total_tokens * requested_max_depth,
         )
+        if quality_check_depth is not None and requested_max_depth >= quality_check_depth:
+            run_total_usage.add(quality_usage)
         models_payload[model] = {
             "pricing": None if pricing is None else asdict(pricing),
             "depths": depth_payload,
+            "quality_gate": {
+                "enabled": quality_check_depth is not None,
+                "checked_depth": quality_check_depth,
+                "min_score": quality_min_score,
+                "statement": QUALITY_STATEMENT,
+                "estimated_usage": quality_usage.to_dict(),
+            },
             "selected_run_total_usage": run_total_usage.to_dict(),
             "selected_run_total_cost_usd": None if pricing is None else round(pricing.estimate_cost(run_total_usage), 6),
         }
@@ -1101,6 +1294,13 @@ def build_estimate_report(
             "counts_by_domain": frame["domain"].value_counts().to_dict(),
         },
         "per_depth_base_usage": base_usage.to_dict(),
+        "quality_gate": {
+            "enabled": quality_check_depth is not None,
+            "checked_depth": quality_check_depth,
+            "min_score": quality_min_score,
+            "statement": QUALITY_STATEMENT,
+            "estimated_usage": quality_usage.to_dict(),
+        },
         "models": models_payload,
         "selected_run_total_estimated_cost_usd": None if any_missing_pricing else round(total_estimated_cost, 6),
         "missing_pricing_models": sorted(
@@ -1182,6 +1382,8 @@ class RecursiveParaphraser:
         max_retries: int,
         temperature: float,
         max_output_tokens: int,
+        quality_check_depth: int | None,
+        quality_min_score: int,
         client: Any | None = None,
     ) -> None:
         self.model = model
@@ -1190,6 +1392,8 @@ class RecursiveParaphraser:
         self.max_retries = max_retries
         self.temperature = temperature
         self.max_output_tokens = max_output_tokens
+        self.quality_check_depth = quality_check_depth
+        self.quality_min_score = quality_min_score
         self.client = client or self._build_client()
 
     def _build_client(self) -> Any:
@@ -1226,6 +1430,27 @@ class RecursiveParaphraser:
             raise last_error
         raise RuntimeError("Unexpected paraphrase request failure.")
 
+    def _create_quality_response(self, prompt: str) -> Any:
+        last_error: Exception | None = None
+        for attempt in range(1, self.max_retries + 1):
+            try:
+                return self.client.responses.create(
+                    model=self.model,
+                    input=prompt,
+                    text={"format": {"type": "text"}},
+                    max_output_tokens=QUALITY_CHECK_MAX_OUTPUT_TOKENS,
+                    temperature=0.0,
+                    store=False,
+                )
+            except (APIConnectionError, APIError, RateLimitError) as exc:
+                last_error = exc
+                if attempt >= self.max_retries:
+                    raise
+                time.sleep(min(30.0, 2.0 ** (attempt - 1)))
+        if last_error is not None:
+            raise last_error
+        raise RuntimeError("Unexpected quality check request failure.")
+
     def paraphrase_rows(
         self,
         ai_rows: pd.DataFrame,
@@ -1236,6 +1461,7 @@ class RecursiveParaphraser:
     ) -> dict[str, ParaphraseRecord]:
         requested_depths = sorted(depths)
         max_depth = max(requested_depths)
+        quality_depth = self.quality_check_depth if self.quality_check_depth in requested_depths else None
         checkpoint = load_paraphrase_checkpoint(checkpoint_path)
         rows = list(ai_rows.itertuples(index=False))
 
@@ -1243,9 +1469,13 @@ class RecursiveParaphraser:
         for row in rows:
             sample_id = str(row.sample_id)
             record = checkpoint.get(sample_id, ParaphraseRecord(sample_id=sample_id))
-            if all(depth in record.depth_outputs for depth in requested_depths):
+            depths_complete = all(depth in record.depth_outputs for depth in requested_depths)
+            quality_complete = quality_depth is None or quality_depth in record.quality_checks_by_depth
+            if depths_complete and quality_complete:
                 continue
             total_pending_calls += max(0, max_depth - completed_consecutive_depth(record))
+            if quality_depth is not None and quality_depth not in record.quality_checks_by_depth:
+                total_pending_calls += 1
 
         completed_calls = 0
         print_call_progress(completed=completed_calls, total=total_pending_calls, model=self.model, force=True)
@@ -1255,7 +1485,9 @@ class RecursiveParaphraser:
             record = checkpoint.get(sample_id, ParaphraseRecord(sample_id=sample_id))
 
             completed_depth = completed_consecutive_depth(record)
-            if all(depth in record.depth_outputs for depth in requested_depths):
+            depths_complete = all(depth in record.depth_outputs for depth in requested_depths)
+            quality_complete = quality_depth is None or quality_depth in record.quality_checks_by_depth
+            if depths_complete and quality_complete:
                 continue
 
             current_text = str(row.text)
@@ -1292,6 +1524,7 @@ class RecursiveParaphraser:
                         "timestamp": utc_now_iso(),
                         "sample_id": sample_id,
                         "model": self.model,
+                        "call_type": "paraphrase",
                         "depth": depth,
                         "response_id": record.response_ids_by_depth[depth],
                         "usage": incremental_usage.to_dict(),
@@ -1299,6 +1532,43 @@ class RecursiveParaphraser:
                 )
 
                 current_text = output_text
+                completed_calls += 1
+                print_call_progress(completed=completed_calls, total=total_pending_calls, model=self.model)
+                if self.request_delay_seconds > 0:
+                    time.sleep(self.request_delay_seconds)
+
+            if quality_depth is not None and quality_depth in record.depth_outputs and quality_depth not in record.quality_checks_by_depth:
+                quality_prompt = build_quality_check_prompt(record.depth_outputs[quality_depth])
+                response = self._create_quality_response(quality_prompt)
+                output_text = extract_response_text(response)
+                if not output_text:
+                    raise RuntimeError(
+                        f"Empty quality check output for sample {sample_id} at depth {quality_depth} using model {self.model}."
+                    )
+
+                quality_result = build_quality_check_result(output_text, min_score=self.quality_min_score)
+                quality_usage = UsageTotals.from_response(response)
+                record.quality_checks_by_depth[quality_depth] = quality_result
+                record.quality_usage_by_depth[quality_depth] = quality_usage
+                record.quality_response_ids_by_depth[quality_depth] = getattr(response, "id", None)
+
+                append_jsonl(
+                    api_call_log_path,
+                    {
+                        "timestamp": utc_now_iso(),
+                        "sample_id": sample_id,
+                        "model": self.model,
+                        "call_type": "quality_check",
+                        "depth": quality_depth,
+                        "response_id": record.quality_response_ids_by_depth[quality_depth],
+                        "statement": QUALITY_STATEMENT,
+                        "min_score": self.quality_min_score,
+                        "score": quality_result["score"],
+                        "passed": quality_result["passed"],
+                        "usage": quality_usage.to_dict(),
+                    },
+                )
+
                 completed_calls += 1
                 print_call_progress(completed=completed_calls, total=total_pending_calls, model=self.model)
                 if self.request_delay_seconds > 0:
@@ -1312,36 +1582,161 @@ class RecursiveParaphraser:
         return checkpoint
 
 
+def summarize_quality_gate(
+    records: dict[str, ParaphraseRecord],
+    *,
+    quality_check_depth: int | None,
+    quality_min_score: int,
+) -> dict[str, Any]:
+    if quality_check_depth is None:
+        return {
+            "enabled": False,
+            "checked_depth": None,
+            "min_score": quality_min_score,
+            "statement": QUALITY_STATEMENT,
+        }
+
+    scores: Counter[int] = Counter()
+    checked = 0
+    passed = 0
+    missing = 0
+    for record in records.values():
+        result = record.quality_checks_by_depth.get(quality_check_depth)
+        if not result:
+            missing += 1
+            continue
+        checked += 1
+        score = int(result.get("score") or 0)
+        if score:
+            scores[score] += 1
+        passed_value = result.get("passed")
+        passed_result = passed_value if isinstance(passed_value, bool) else score >= quality_min_score
+        if passed_result:
+            passed += 1
+
+    rejected = checked - passed
+    return {
+        "enabled": True,
+        "checked_depth": quality_check_depth,
+        "min_score": quality_min_score,
+        "statement": QUALITY_STATEMENT,
+        "checked": checked,
+        "passed": passed,
+        "rejected": rejected,
+        "missing": missing,
+        "score_counts": {str(score): scores.get(score, 0) for score in range(1, 6)},
+    }
+
+
 def summarize_paraphrase_usage(
     records: dict[str, ParaphraseRecord],
     *,
     depths: list[int],
     model: str,
     pricing: PricingEntry | None,
+    quality_check_depth: int | None,
+    quality_min_score: int,
 ) -> dict[str, Any]:
     max_depth = max(depths)
     incremental_usage: dict[int, UsageTotals] = {depth: UsageTotals() for depth in range(1, max_depth + 1)}
+    quality_usage_by_depth: dict[int, UsageTotals] = {depth: UsageTotals() for depth in range(1, max_depth + 1)}
     for record in records.values():
         for depth, usage in record.incremental_usage_by_depth.items():
             incremental_usage[depth].add(usage)
+        for depth, usage in record.quality_usage_by_depth.items():
+            if depth in quality_usage_by_depth:
+                quality_usage_by_depth[depth].add(usage)
 
     cumulative_usage: dict[int, UsageTotals] = {}
+    cumulative_paraphrase_usage: dict[int, UsageTotals] = {}
     running = UsageTotals()
+    running_paraphrase = UsageTotals()
     for depth in range(1, max_depth + 1):
+        running_paraphrase.add(incremental_usage[depth])
+        cumulative_paraphrase_usage[depth] = running_paraphrase.copy()
         running.add(incremental_usage[depth])
+        running.add(quality_usage_by_depth[depth])
         cumulative_usage[depth] = running.copy()
 
-    payload: dict[str, Any] = {"model": model, "depths": {}}
+    quality_summary = summarize_quality_gate(records, quality_check_depth=quality_check_depth, quality_min_score=quality_min_score)
+    payload: dict[str, Any] = {"model": model, "depths": {}, "quality_gate": quality_summary}
     for depth in depths:
+        total_incremental_usage = incremental_usage[depth].copy()
+        total_incremental_usage.add(quality_usage_by_depth[depth])
         payload["depths"][str(depth)] = {
-            "incremental_usage": incremental_usage[depth].to_dict(),
+            "incremental_usage": total_incremental_usage.to_dict(),
             "cumulative_usage": cumulative_usage[depth].to_dict(),
-            "actual_incremental_cost_usd": None if pricing is None else round(pricing.estimate_cost(incremental_usage[depth]), 6),
+            "paraphrase_incremental_usage": incremental_usage[depth].to_dict(),
+            "paraphrase_cumulative_usage": cumulative_paraphrase_usage[depth].to_dict(),
+            "quality_check_usage": quality_usage_by_depth[depth].to_dict(),
+            "actual_incremental_cost_usd": None if pricing is None else round(pricing.estimate_cost(total_incremental_usage), 6),
             "actual_cumulative_cost_usd": None if pricing is None else round(pricing.estimate_cost(cumulative_usage[depth]), 6),
+            "actual_quality_check_cost_usd": None if pricing is None else round(pricing.estimate_cost(quality_usage_by_depth[depth]), 6),
         }
     payload["selected_run_total_usage"] = cumulative_usage[max_depth].to_dict()
     payload["selected_run_total_cost_usd"] = None if pricing is None else round(pricing.estimate_cost(cumulative_usage[max_depth]), 6)
     return payload
+
+
+def select_paraphrased_text_for_export(
+    *,
+    record: ParaphraseRecord,
+    requested_depth: int,
+    original_text: str,
+    quality_check_depth: int | None,
+    quality_min_score: int,
+) -> tuple[str, dict[str, Any]]:
+    if requested_depth not in record.depth_outputs:
+        raise KeyError(f"Missing depth {requested_depth} paraphrase for AI sample '{record.sample_id}'.")
+
+    selected_text = record.depth_outputs[requested_depth]
+    selected_depth = requested_depth
+    gate_metadata: dict[str, Any] = {
+        "enabled": False,
+        "checked_depth": quality_check_depth,
+        "min_score": quality_min_score,
+        "selected_depth": selected_depth,
+    }
+
+    if quality_check_depth is None or requested_depth != quality_check_depth:
+        return selected_text, gate_metadata
+
+    quality_result = record.quality_checks_by_depth.get(quality_check_depth)
+    if quality_result is None:
+        raise KeyError(
+            f"Missing quality check for depth {quality_check_depth} paraphrase on AI sample '{record.sample_id}'."
+        )
+
+    score = int(quality_result.get("score") or 0)
+    passed_value = quality_result.get("passed")
+    passed = passed_value if isinstance(passed_value, bool) else score >= quality_min_score
+    rejected = not passed
+    fallback_depth: int | None = None
+    if rejected:
+        for candidate_depth in range(requested_depth - 1, 0, -1):
+            if candidate_depth in record.depth_outputs:
+                fallback_depth = candidate_depth
+                selected_depth = candidate_depth
+                selected_text = record.depth_outputs[candidate_depth]
+                break
+        if fallback_depth is None:
+            fallback_depth = 0
+            selected_depth = 0
+            selected_text = original_text
+
+    gate_metadata.update(
+        {
+            "enabled": True,
+            "statement": QUALITY_STATEMENT,
+            "score": score,
+            "label": quality_result.get("label"),
+            "passed": passed,
+            "rejected": rejected,
+            "fallback_depth": fallback_depth,
+            "selected_depth": selected_depth,
+        }
+    )
+    return selected_text, gate_metadata
 
 
 def build_paraphrased_dataset(
@@ -1351,6 +1746,8 @@ def build_paraphrased_dataset(
     model: str,
     depth: int,
     seed: int,
+    quality_check_depth: int | None,
+    quality_min_score: int,
     created_at: str | None = None,
 ) -> pd.DataFrame:
     created_at = created_at or utc_now_iso()
@@ -1362,10 +1759,14 @@ def build_paraphrased_dataset(
         if sample_id not in paraphrase_records:
             raise KeyError(f"Missing paraphrase results for AI sample '{sample_id}'.")
         record = paraphrase_records[sample_id]
-        if depth not in record.depth_outputs:
-            raise KeyError(f"Missing depth {depth} paraphrase for AI sample '{sample_id}'.")
 
-        rewritten_text = record.depth_outputs[depth]
+        rewritten_text, quality_gate_metadata = select_paraphrased_text_for_export(
+            record=record,
+            requested_depth=depth,
+            original_text=str(row["text"]),
+            quality_check_depth=quality_check_depth,
+            quality_min_score=quality_min_score,
+        )
         source_model = str(row["source_model"])
         metadata = {
             "generator_model": model,
@@ -1374,6 +1775,7 @@ def build_paraphrased_dataset(
             "source_sample_id": sample_id,
             "source_model": source_model,
             "created_at": created_at,
+            "quality_gate": quality_gate_metadata,
         }
 
         variant.at[index, "text"] = rewritten_text
@@ -1468,6 +1870,18 @@ def add_shared_arguments(parser: argparse.ArgumentParser) -> None:
     parser.add_argument("--seed", type=int, default=DEFAULT_SEED)
     parser.add_argument("--test-size", type=float, default=DEFAULT_TEST_SIZE)
     parser.add_argument("--val-size", type=float, default=DEFAULT_VAL_SIZE)
+    parser.add_argument(
+        "--quality-check-depth",
+        type=int,
+        default=DEFAULT_QUALITY_CHECK_DEPTH,
+        help="Depth to score with the OpenAI Likert quality gate. Use 0 to disable; skipped if that depth is not generated.",
+    )
+    parser.add_argument(
+        "--quality-min-score",
+        type=int,
+        default=DEFAULT_QUALITY_MIN_SCORE,
+        help="Minimum 1-5 Likert score required to use the checked depth in exported datasets.",
+    )
     parser.add_argument("--num-shards", type=int, default=1, help="Split sampled source rows into this many shards.")
     parser.add_argument(
         "--shard-index",
@@ -1566,6 +1980,8 @@ def run_command(args: argparse.Namespace) -> dict[str, Any]:
     validate_shard_args(args.num_shards, args.shard_index)
     generator_models = parse_generator_models(args.generator_model)
     depths = parse_depths(args.depths)
+    validate_quality_min_score(args.quality_min_score)
+    quality_check_depth = resolve_quality_check_depth(depths, args.quality_check_depth)
     pricing_overrides = parse_model_pricing(args.model_pricing)
     prompt_prefix = load_prompt_prefix()
 
@@ -1606,6 +2022,8 @@ def run_command(args: argparse.Namespace) -> dict[str, Any]:
         sample_selection=sample_selection,
         source_summary=source_summary,
         prompt_prefix=prompt_prefix,
+        quality_check_depth=quality_check_depth,
+        quality_min_score=args.quality_min_score,
     )
     validate_budget_guard(estimate_report, args.max_estimated_cost_usd)
 
@@ -1646,6 +2064,8 @@ def run_command(args: argparse.Namespace) -> dict[str, Any]:
             max_retries=args.max_retries,
             temperature=args.temperature,
             max_output_tokens=args.max_output_tokens,
+            quality_check_depth=quality_check_depth,
+            quality_min_score=args.quality_min_score,
         )
         paraphrase_records = paraphraser.paraphrase_rows(
             ai_rows,
@@ -1653,7 +2073,14 @@ def run_command(args: argparse.Namespace) -> dict[str, Any]:
             checkpoint_path=checkpoint_path,
             api_call_log_path=api_call_log_path,
         )
-        usage_summary = summarize_paraphrase_usage(paraphrase_records, depths=depths, model=model, pricing=pricing)
+        usage_summary = summarize_paraphrase_usage(
+            paraphrase_records,
+            depths=depths,
+            model=model,
+            pricing=pricing,
+            quality_check_depth=quality_check_depth,
+            quality_min_score=args.quality_min_score,
+        )
 
         for depth in depths:
             variant_frame = build_paraphrased_dataset(
@@ -1662,6 +2089,8 @@ def run_command(args: argparse.Namespace) -> dict[str, Any]:
                 model=model,
                 depth=depth,
                 seed=args.seed,
+                quality_check_depth=quality_check_depth,
+                quality_min_score=args.quality_min_score,
             )
             variant_dataset_dir = output_dir / "datasets" / model_slug / f"depth_{depth}"
             variant_manifest = build_dataset_manifest(
@@ -1677,6 +2106,7 @@ def run_command(args: argparse.Namespace) -> dict[str, Any]:
                     "control_dataset_dir": str(control_dataset_dir),
                     "prompt_prefix_file": DEFAULT_PROMPT_PREFIX_FILE.name,
                     "paraphrase_usage": usage_summary["depths"][str(depth)],
+                    "quality_gate": usage_summary["quality_gate"],
                     "checkpoint_path": str(checkpoint_path),
                     "api_call_log_path": str(api_call_log_path),
                 },
@@ -1689,6 +2119,7 @@ def run_command(args: argparse.Namespace) -> dict[str, Any]:
                     "recursion_depth": depth,
                     "dataset_dir": str(variant_dataset_dir),
                     "paraphrase_usage": usage_summary["depths"][str(depth)],
+                    "quality_gate": usage_summary["quality_gate"],
                 }
             )
 
@@ -1700,6 +2131,12 @@ def run_command(args: argparse.Namespace) -> dict[str, Any]:
         "estimate_report_path": str(output_dir / "estimate.json"),
         "control_dataset_dir": str(control_dataset_dir),
         "prompt_prefix_file": DEFAULT_PROMPT_PREFIX_FILE.name,
+        "quality_gate": {
+            "enabled": quality_check_depth is not None,
+            "checked_depth": quality_check_depth,
+            "min_score": args.quality_min_score,
+            "statement": QUALITY_STATEMENT,
+        },
         "variants": variant_manifests,
         "pricing_verified_at": PRICING_VERIFIED_AT,
         "pricing_source_url": PRICING_SOURCE_URL,
@@ -1717,6 +2154,8 @@ def estimate_command(args: argparse.Namespace) -> dict[str, Any]:
     validate_shard_args(args.num_shards, args.shard_index)
     generator_models = parse_generator_models(args.generator_model)
     depths = parse_depths(args.depths)
+    validate_quality_min_score(args.quality_min_score)
+    quality_check_depth = resolve_quality_check_depth(depths, args.quality_check_depth)
     pricing_overrides = parse_model_pricing(args.model_pricing)
     prompt_prefix = load_prompt_prefix()
 
@@ -1756,6 +2195,8 @@ def estimate_command(args: argparse.Namespace) -> dict[str, Any]:
         sample_selection=sample_selection,
         source_summary=source_summary,
         prompt_prefix=prompt_prefix,
+        quality_check_depth=quality_check_depth,
+        quality_min_score=args.quality_min_score,
     )
     report["control_summary"] = control_summary
 

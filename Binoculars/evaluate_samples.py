@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 
 import argparse
+import ast
 import json
 from pathlib import Path
 from typing import Optional
@@ -98,6 +99,67 @@ def normalize_labels(labels: pd.Series) -> pd.Series:
             f"Found invalid values: {invalid}"
         )
     return numeric
+
+
+def parse_answer_list(value) -> list[str]:
+    if isinstance(value, list):
+        parsed = value
+    elif isinstance(value, str):
+        value = value.strip()
+        if not value:
+            return []
+        try:
+            parsed = json.loads(value)
+        except json.JSONDecodeError:
+            try:
+                parsed = ast.literal_eval(value)
+            except (ValueError, SyntaxError):
+                parsed = [value]
+    elif pd.isna(value):
+        return []
+    else:
+        parsed = value
+
+    if isinstance(parsed, list):
+        return [str(item).strip() for item in parsed if pd.notna(item) and str(item).strip()]
+    if pd.notna(parsed) and str(parsed).strip():
+        return [str(parsed).strip()]
+    return []
+
+
+def build_hc3_eval_dataframe(df: pd.DataFrame) -> pd.DataFrame:
+    required_columns = {"hc3_row_id", "source", "question", "human_answers", "chatgpt_answers"}
+    missing = sorted(required_columns.difference(df.columns))
+    if missing:
+        raise ValueError(
+            "Unsupported CSV format. Expected either a text/label CSV "
+            "or an HC3 wide CSV with columns: "
+            f"{sorted(required_columns)}. Missing columns: {missing}"
+        )
+
+    rows = []
+    for row in df.itertuples(index=False):
+        base = {
+            "hc3_row_id": getattr(row, "hc3_row_id"),
+            "source": getattr(row, "source"),
+            "question": getattr(row, "question"),
+        }
+        for column_name, label in [("human_answers", "human"), ("chatgpt_answers", "ai")]:
+            for answer_index, text in enumerate(parse_answer_list(getattr(row, column_name))):
+                rows.append(
+                    {
+                        **base,
+                        "answer_type": label,
+                        "answer_index": answer_index,
+                        "text": text,
+                        "label": label,
+                    }
+                )
+
+    eval_df = pd.DataFrame(rows)
+    if eval_df.empty:
+        raise ValueError("HC3 wide CSV did not contain any answer text to score.")
+    return eval_df
 
 
 def prediction_text(prediction: int) -> str:
@@ -220,10 +282,11 @@ def main() -> None:
     args.output_dir.mkdir(parents=True, exist_ok=True)
 
     df = pd.read_csv(args.input)
-    if args.text_column not in df.columns:
-        raise ValueError(f"Missing text column: {args.text_column}")
-    if args.label_column not in df.columns:
-        raise ValueError(f"Missing label column: {args.label_column}")
+    if args.text_column not in df.columns or args.label_column not in df.columns:
+        # Auto-handle HC3 wide CSVs created by create_hc3_sample.py.
+        df = build_hc3_eval_dataframe(df)
+        args.text_column = "text"
+        args.label_column = "label"
 
     y_true = normalize_labels(df[args.label_column])
     threshold = THRESHOLDS[args.mode]
