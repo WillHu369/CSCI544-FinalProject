@@ -91,6 +91,14 @@ def sanitize_filename_part(value):
     cleaned = re.sub(r"[^A-Za-z0-9._-]+", "_", str(value).strip())
     return cleaned.strip("._-") or "unknown"
 
+
+def infer_timestamp(results_file_path):
+    # DetectGPT runs store outputs under a timestamped directory; use that as timestamp.
+    parent_name = results_file_path.parent.name
+    if parent_name:
+        return parent_name
+    return "unknown"
+
 def resolve_results_path(path_str):
     p = Path(path_str)
     if p.is_absolute() and p.exists():
@@ -174,7 +182,10 @@ output_payload = {
 
 output_dir = Path(__file__).resolve().parent / "metric_results"
 output_dir.mkdir(parents=True, exist_ok=True)
-output_path = output_dir / f"RESULTS_{results_path.stem}.json"
+timestamp = sanitize_filename_part(infer_timestamp(results_path))
+model_name = sanitize_filename_part(metadata["model_used"])
+dataset_name = sanitize_filename_part(metadata["dataset_used"])
+output_path = output_dir / f"{model_name}_{dataset_name}_{timestamp}_results.json"
 roc_csv_filename = (
     f"{sanitize_filename_part(metadata['detection_method'])}_"
     f"{sanitize_filename_part(metadata['model_used'])}_"

@@ -135,7 +135,7 @@ def perturb_texts_(texts, span_length, pct, ceil_pct=False):
 
         # Handle the fact that sometimes the model doesn't generate the right number of fills and we have to try again
         attempts = 1
-        while '' in perturbed_texts:
+        while '' in perturbed_texts and attempts <= args.max_fill_attempts:
             idxs = [idx for idx, x in enumerate(perturbed_texts) if x == '']
             print(f'WARNING: {len(idxs)} texts have no fills. Trying again [attempt {attempts}].')
             masked_texts = [tokenize_and_mask(x, span_length, pct, ceil_pct) for idx, x in enumerate(texts) if idx in idxs]
@@ -145,6 +145,16 @@ def perturb_texts_(texts, span_length, pct, ceil_pct=False):
             for idx, x in zip(idxs, new_perturbed_texts):
                 perturbed_texts[idx] = x
             attempts += 1
+
+        # Guardrail: after max retries, keep unresolved items as original text.
+        unresolved_idxs = [idx for idx, x in enumerate(perturbed_texts) if x == '']
+        if unresolved_idxs:
+            print(
+                f'WARNING: {len(unresolved_idxs)} texts still have no fills after '
+                f'{args.max_fill_attempts} attempts. Falling back to original text.'
+            )
+            for idx in unresolved_idxs:
+                perturbed_texts[idx] = texts[idx]
     else:
         if args.random_fills_tokens:
             # tokenize base_tokenizer
@@ -766,6 +776,7 @@ if __name__ == '__main__':
     parser.add_argument('--chunk_size', type=int, default=20)
     parser.add_argument('--n_similarity_samples', type=int, default=20)
     parser.add_argument('--prompt_tokens', type=int, default=30)
+    parser.add_argument('--max_fill_attempts', type=int, default=20)
     parser.add_argument('--int8', action='store_true')
     parser.add_argument('--half', action='store_true')
     parser.add_argument('--base_half', action='store_true')
@@ -789,6 +800,8 @@ if __name__ == '__main__':
 
     if args.prompt_tokens <= 0:
         raise ValueError("--prompt_tokens must be > 0")
+    if args.max_fill_attempts <= 0:
+        raise ValueError("--max_fill_attempts must be > 0")
 
     API_TOKEN_COUNTER = 0
 
