@@ -21,6 +21,7 @@ DATASETS = [
     'hc3_eli5',
     'hc3_csai',
     'hc3_stylisticCleanup',
+    'hc3_perturbed',
 ]
 
 
@@ -190,6 +191,10 @@ def load_hc3_csai(cache_dir=None):
 
 def load_hc3_stylisticCleanup(cache_dir=None):
     return _load_hc3_avoidance_technique_loader('data/hc3/hc3_stylisticCleanup_10000.csv')
+
+
+def load_hc3_perturbed(cache_dir=None):
+    return _load_hc3_avoidance_technique_loader('data/hc3/hc3_perturbed_10000.csv')
 
 
 def load_language(language, cache_dir):

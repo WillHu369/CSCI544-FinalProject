@@ -180,11 +180,15 @@ output_payload = {
     }
 }
 
-output_dir = Path(__file__).resolve().parent / "metric_results"
-output_dir.mkdir(parents=True, exist_ok=True)
 timestamp = sanitize_filename_part(infer_timestamp(results_path))
 model_name = sanitize_filename_part(metadata["model_used"])
 dataset_name = sanitize_filename_part(metadata["dataset_used"])
+output_root_dir = Path(__file__).resolve().parent / "metric_results"
+output_root_dir.mkdir(parents=True, exist_ok=True)
+run_folder_name = f"{model_name}_{dataset_name}_{timestamp}"
+output_dir = output_root_dir / run_folder_name
+output_dir.mkdir(parents=True, exist_ok=True)
+
 output_path = output_dir / f"{model_name}_{dataset_name}_{timestamp}_results.json"
 roc_csv_filename = (
     f"{sanitize_filename_part(metadata['detection_method'])}_"

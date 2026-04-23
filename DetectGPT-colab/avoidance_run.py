@@ -634,7 +634,7 @@ def generate_samples(raw_data, batch_size):
 
 
 def generate_data(dataset, key):
-    if dataset in ['avoidance_recursive_hc3', 'hc3_stylisticCleanup']:
+    if dataset in ['avoidance_recursive_hc3', 'hc3_stylisticCleanup', 'hc3_perturbed']:
         paired_data = custom_datasets.load(dataset, cache_dir)
 
         originals = [strip_newlines(x.strip()) for x in paired_data['original'] if isinstance(x, str)]
