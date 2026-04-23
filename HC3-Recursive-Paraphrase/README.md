@@ -34,6 +34,19 @@ Generate depth `1`, `2`, and `3` dataset variants for a 100-row pilot:
 python paraphrase_pipeline.py run --sample-rows 100 --generator-model gpt-5.4-mini --max-estimated-cost-usd 5
 ```
 
+By default, depth `3` is sent back to OpenAI for a Likert quality check using:
+
+```text
+Statement: "This document was a high quality piece of text."
+Strongly Disagree
+Disagree
+Neutral / Neither Agree nor Disagree
+Agree
+Strongly Agree
+```
+
+Scores below `3` are rejected for the depth `3` export. The row is kept, but the exported text falls back to the previous available paraphrase depth, usually depth `2`. Use `--quality-min-score 4` to make the gate stricter, or `--quality-check-depth 0` to disable it.
+
 Generate a proportional subset with a different model:
 
 ```bash
@@ -58,6 +71,8 @@ Each run writes into `artifacts/experiments/<source>_<subset>_seed<seed>/`:
 - `checkpoints/<model>_depthmax<n>.jsonl`
 - `api_calls/<model>_depthmax<n>.jsonl`
 - `generation_manifest.json`
+
+Quality gate scores are stored in the checkpoint JSONL under `quality_checks_by_depth`, logged in `api_calls/<model>_depthmax<n>.jsonl` with `call_type: quality_check`, and summarized in each dataset `manifest.json`.
 
 Each dataset directory contains the same split CSV shape expected by the existing ZeroGPT Colab workflow. Use one of the generated dataset directories as the input data folder when you run the training and evaluation workflow in `ZeroGPT/colab_hc3_bundle`.
 
