@@ -100,7 +100,7 @@ hc3_unified_10000_seed42_clean.csv
 4. Adjust the config values in the notebook if needed:
    `MODEL_NAME`, `PERTURBATIONS_PER_ANSWER`, `GENERATION_BATCH_SIZE`, `MAX_ROWS`, `CHECKPOINT_EVERY`.
 5. Run the remaining cells in order.
-
+testestest 
 ### Outputs
 
 The notebook writes:
@@ -121,3 +121,14 @@ The DetectGPT notebook lives in [`DetectGPT-colab/DetectGPT.ipynb`](DetectGPT-co
 - Results are written under `results/`, and the notebook uses a Drive-backed `hf_cache` for Hugging Face assets.
 
 See [`DetectGPT-colab/README.md`](DetectGPT-colab/README.md) for the full notebook-specific setup and command examples.
+
+### Outputs
+
+The notebook writes:
+```results/{results path here}/perturbation_{number of perturbations}_d_results.json```
+
+This file contains the results of the test, which is used by calculate_metrics.py to generate the relevant metrics (F1 score, TPR @0.1 FPR, etc). Like so:
+
+```python calculate_metrics.py --path results/{results path here}/perturbation_20_d_results.json```
+
+The path to the results can usually be seen in the console output log. The code will begin by writing into tmp_results folder first, and once it is finished, it will move to the results folder. The log will include the path.
