@@ -1352,24 +1352,14 @@ def completed_consecutive_depth(record: ParaphraseRecord) -> int:
     return completed_depth
 
 
-def format_progress_bar(completed: int, total: int, *, width: int = 28) -> str:
-    if total <= 0:
-        return "[" + "=" * width + "]"
-    filled = min(width, int(round(width * completed / total)))
-    return "[" + "=" * filled + "-" * (width - filled) + "]"
-
-
 def print_call_progress(*, completed: int, total: int, model: str, force: bool = False) -> None:
     if total <= 0:
         if force:
-            print(f"[paraphrase:{model}] no API calls left; checkpoint is already complete")
+            print(f"[paraphrase:{model}] checkpoint already complete")
         return
     if not force and completed % 10 != 0:
         return
-    remaining = max(total - completed, 0)
-    percent = 100.0 * completed / total
-    bar = format_progress_bar(completed, total)
-    print(f"[paraphrase:{model}] {bar} {completed}/{total} calls | {remaining} left | {percent:.1f}%")
+    print(f"[paraphrase:{model}] calls {completed}/{total}")
 
 
 class RecursiveParaphraser:
