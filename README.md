@@ -39,7 +39,7 @@ The code in this repo was run in two environments:
 ## How results are generated
 
 - The recursive paraphrase pipeline reads an HC3 unified CSV and writes control plus recursive-depth paraphrase CSV exports and manifests.
-- The stylistic cleanup reads an HC3 unified CSV and perturbs input data by removing em dashes, emojs, and converting all markdown formatting (lists, headers, bold text, bullet points) to standard/prose text. 
+- The stylistic cleanup reads an HC3 unified CSV and perturbs AI data by removing em dashes, emojs, and converting all markdown formatting (lists, headers, bold text, bullet points) to standard/prose text. It writes the perturbed CSV out. 
 - The perturbation notebook reads the HC3 CSV, perturbs only the AI answers with T5 mask filling, and writes a perturbed CSV plus a JSON report.
 - The ZeroGPT Colab workflow trains or reuses the SVM-TF-IDF, XGBoost-TF-IDF, and GPTZero-like detectors, evaluates the kept test datasets, and writes metric outputs under `artifacts/runs/` and `metrics_share/`.
 - The Binoculars workflow scores the kept evaluation sets and produces metric artifacts for comparison with the other detectors.
