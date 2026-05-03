@@ -254,4 +254,4 @@ Metrics/DetectGPT/ROC_curve_csv/DetectGPT_tiiuae_falcon-7b-instruct_hc3_all_semi
 
 # don't upload the files from the CSCI-544-FinalProject\CSCI544-FinalProject\DetectGPT-colab\data folder, as a copy exists already
 # in the dataset folder
-DetectGPT-colab/data/*
+DetectGPT-colab/data/hc3/hc3_perturbed_10000.csv
