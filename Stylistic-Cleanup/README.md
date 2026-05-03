@@ -21,7 +21,7 @@ Each row is flagged with `stylistic_changed: True/False` to track whether any mo
 
 ## How to Run
 
-1. Open `RB_final_project_stylistic_cleanup.pyn`
+1. Open `RB_final_project_stylistic_cleanup.ipynb`
 2. Mount Google Drive & Ensure the HC3 dataset is at:
    ```
    /content/drive/MyDrive/colab_hc3_bundle/HC3-Dataset-Samples/hc3_unified_10000_seed42.csv
