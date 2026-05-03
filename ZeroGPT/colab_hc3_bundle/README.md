@@ -1,93 +1,80 @@
-# HC3 Colab Project
+# HC3 Colab Workflow
 
-This folder is meant to be uploaded to Google Drive, while the notebook file should be uploaded into Colab separately.
+This folder is the evaluator-facing Colab bundle for the three classical baselines and the GPTZero-like detector.
 
-It needs to include:
+## Environment setup
 
-- full HC3 data
-- duplicated `gpt_zero/` code
-- a local `gpt2` model under `hf_models/gpt2/` (not included on git due to size; run the optional download cell in `hc3_colab_workflow.ipynb` once to recreate it)
-- trained SVM and XGBoost baseline models
-- GPTZero-like training code
-- reference metrics
-- a ready-to-run notebook
+- Google Drive
+- Google Colab
+- a Colab GPU runtime
 
-## Main File
+Upload this entire folder to Google Drive:
 
-Open [hc3_colab_workflow.ipynb](./hc3_colab_workflow.ipynb).
+```text
+ZeroGPT/colab_hc3_bundle/
+```
 
-## Quick Start
+Open this notebook directly in Colab:
 
-1. Upload `hc3_colab_workflow.ipynb` into Colab directly.
-2. Select a GPU runtime in Colab.
-   Runtime > Change runtime type > GPU
-3. Before uploading the folder, strongly prefer adding the scorer model under `hf_models/gpt2/`.
-   Run the optional download cell in `hc3_colab_workflow.ipynb` once with `REPO_DIR` pointing at this folder to populate `hf_models/gpt2/` locally before uploading to Google Drive.
-4. Upload this folder to your Google Drive.
-5. Mount Google Drive in the notebook.
-6. Set `REPO_DIR` to the folder path in Drive.
-7. Run the cells in order.
+```text
+hc3_colab_workflow.ipynb
+```
 
-Do not run the notebook from Google Drive. Upload the notebook into Colab itself and use the Drive folder only as the project/data path.
+The notebook installs its runtime dependencies when you run the setup cells.
 
-If `hf_models/gpt2/` is present, the notebook will use that local model. If it is missing, the GPTZero section will fall back to downloading `gpt2` from Hugging Face at runtime.
+## Device / system used
 
-Recommended `REPO_DIR`:
+- Platform: Google Colab
+- Runtime: GPU runtime
+- Storage: Google Drive for the uploaded `colab_hc3_bundle` folder
+
+## How to run
+
+Do not run the notebook from Drive. Keep the project folder in Drive and the notebook in Colab.
+
+1. Upload `ZeroGPT/colab_hc3_bundle` to Google Drive.
+1. Open `hc3_colab_workflow.ipynb` in Colab.
+1. Select a GPU runtime.
+1. Set:
 
 ```python
 REPO_DIR = "/content/drive/MyDrive/colab_hc3_bundle"
 ```
 
-## What You Can Run
+1. Run the notebook cells in order.
 
-Baseline models:
+## Optional Local GPT-2 Cache
 
-- use the existing SVM and XGBoost models
-- or retrain them in Colab to overwrite `artifacts/models/baselines/` and refresh `artifacts/runs/hc3_baselines_run/`
+If `hf_models/gpt2/` exists, the notebook uses it.
 
-GPTZero-like model:
+If it does not exist, the notebook can still run by downloading `gpt2` from Hugging Face at runtime.
 
-- train it in Colab on HC3
-- score the test split
-- generate evaluation metrics and comparison plots
-- overwrite `artifacts/models/gptzero_like/` and refresh `artifacts/runs/hc3_gptzero_run/` when you rerun training
-- prefer the local `hf_models/gpt2/` copy when present
-- fall back to downloading `gpt2` only if the local folder is missing
+## Test Dataset Evaluation
 
-## Input Format
+The notebook evaluates the kept dataset variants under:
 
-The code accepts split files named:
+```text
+test_dataset/
+```
 
-- `train.parquet`, `val.parquet`, `test.parquet`
-- `train.csv`, `val.csv`, `test.csv`
+That includes:
 
-Parquet is preferred for large runs, but CSV is supported.
+- original clean HC3 test set
+- stylistic cleanup set
+- recursive paraphrase depth 1/2/3 test sets
+- T5 perturbation test set
 
-## Outputs
+Shared per-dataset metric exports are written to:
 
-Baseline outputs go under:
+```text
+metrics_share/
+```
 
-- `artifacts/runs/hc3_baselines_run/`
+## How results are generated
 
-GPTZero-like runs go under:
+The notebook uses the prepared data and test files in this folder to produce the reported metrics.
 
-- `artifacts/runs/hc3_gptzero_run/`
-
-Each run writes:
-
-- `predictions/`
-- `metrics/`
-- `run_config.json`
-
-## Notes
-
-- HC3 is already prepared in `artifacts/data/hc3/`.
-- The local GPTZero scorer model is not included on git; run the notebook's optional download cell once to recreate `hf_models/gpt2/` when needed.
-- The baseline models are already available in `artifacts/models/baselines/`; retraining in the notebook overwrites that same directory instead of creating a parallel baseline model path.
-- The GPTZero-like model is intended to be trained in Colab, and rerunning that section overwrites the saved detector artifacts in `artifacts/models/gptzero_like/` and refreshes `artifacts/runs/hc3_gptzero_run/`.
-- The recommended workflow is to populate `hf_models/gpt2/` locally before uploading the folder to Drive, so Colab does not need to download the scorer model at runtime.
-- If you choose to push `hf_models/gpt2/pytorch_model.bin` to GitHub, use Git LFS.
-- If you previously ran the install cell before these pinned versions, restart the Colab runtime and run the install cell again.
-- If baseline model loading fails after a version mismatch, rerun the dependency install cell from a fresh Colab runtime or retrain the baselines in Colab.
-- If GPTZero-like is too slow, try `distilgpt2` or reduce `max_sentences_per_text`.
-- If XGBoost GPU mode fails, change `xgb_device` to `"cpu"`.
+1. It trains or reuses the classical baselines and the GPTZero-like detector.
+1. It evaluates the kept test sets: original clean, stylistic cleanup, recursive paraphrase depth 1/2/3, and T5 perturbation.
+1. It writes baseline-run metrics under `artifacts/runs/hc3_baselines_run/metrics/`.
+1. It writes shared per-dataset metric exports under `metrics_share/`.

@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import gc
-import time
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
@@ -30,19 +29,10 @@ def _should_report_progress(batch_index: int, total_batches: int) -> bool:
 def _print_progress(prefix: str, batch_index: int, total_batches: int, processed_rows: int, total_rows: int) -> None:
     print(f"[{prefix}] batch {batch_index}/{total_batches} | processed {processed_rows}/{total_rows} samples")
 
-
-def _format_duration(seconds: float) -> str:
-    rounded = max(int(seconds), 0)
-    hours, remainder = divmod(rounded, 3600)
-    minutes, secs = divmod(remainder, 60)
-    return f"{hours:02d}:{minutes:02d}:{secs:02d}"
-
-
 class _XGBoostRoundProgressCallback(xgb.callback.TrainingCallback):
     def __init__(self, total_rounds: int, log_interval: int = 10):
         self.total_rounds = max(int(total_rounds), 1)
         self.log_interval = max(int(log_interval), 1)
-        self.start_time = time.perf_counter()
         self.best_val_logloss: float | None = None
         self.best_round: int | None = None
 
@@ -58,28 +48,14 @@ class _XGBoostRoundProgressCallback(xgb.callback.TrainingCallback):
 
     def after_iteration(self, model, epoch: int, evals_log) -> bool:
         round_number = epoch + 1
-        train_logloss = self._latest_metric(evals_log, "train", "logloss")
         val_logloss = self._latest_metric(evals_log, "val", "logloss")
-
-        if val_logloss is not None:
-            if self.best_val_logloss is None or val_logloss < self.best_val_logloss:
-                self.best_val_logloss = val_logloss
-                self.best_round = round_number
+        if val_logloss is not None and (self.best_val_logloss is None or val_logloss < self.best_val_logloss):
+            self.best_val_logloss = val_logloss
+            self.best_round = round_number
 
         should_print = round_number == 1 or round_number == self.total_rounds or round_number % self.log_interval == 0
         if should_print:
-            elapsed = time.perf_counter() - self.start_time
-            eta = (elapsed / round_number) * (self.total_rounds - round_number) if round_number else 0.0
-            parts = [f"boosting round {round_number}/{self.total_rounds}"]
-            if train_logloss is not None:
-                parts.append(f"train-logloss={train_logloss:.4f}")
-            if val_logloss is not None:
-                parts.append(f"val-logloss={val_logloss:.4f}")
-            if self.best_val_logloss is not None and self.best_round is not None:
-                parts.append(f"best-val-logloss={self.best_val_logloss:.4f}@{self.best_round}")
-            parts.append(f"elapsed={_format_duration(elapsed)}")
-            parts.append(f"eta={_format_duration(eta)}")
-            print("[xgboost] " + " | ".join(parts))
+            print(f"[xgboost] round {round_number}/{self.total_rounds}")
         return False
 
 

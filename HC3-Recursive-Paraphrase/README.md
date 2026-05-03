@@ -1,93 +1,104 @@
 # HC3 Recursive Paraphrase
 
-This folder builds recursive paraphrase dataset variants from the HC3 sample CSV in the repository. It reuses the HC3 normalization and split logic from `ZeroGPT/colab_hc3_bundle`, but it does not train or score detectors itself. The output is a set of CSV dataset bundles that can be used by the existing ZeroGPT Colab workflow.
+This folder generates recursive paraphrase variants of the HC3 unified dataset. It reuses the HC3 normalization and split logic from `ZeroGPT/colab_hc3_bundle`, but it does not train or score detectors itself.
 
-## Setup
+## Environment setup
 
-Install the Python dependencies for this folder:
+- Python with the dependencies in `requirements.txt`
+- an OpenAI API key
+- an HC3 CSV source file
+
+Install the dependencies:
 
 ```bash
 pip install -r requirements.txt
 ```
 
-Store your OpenAI key in a local `.env` file in this folder:
+Create `HC3-Recursive-Paraphrase/.env` with:
 
 ```dotenv
 OPENAI_API_KEY=your_api_key_here
 ```
 
-The script auto-loads that file when it starts.
+The script loads that file automatically.
 
-Edit `prompt_prefix.txt` to tune the paraphrasing behavior. The script uses that file as the instruction prefix, then appends the row's domain, question, and answer text automatically.
+## Device / system used
 
-## Commands
+- Platform used for the tracked export: local Windows/Python environment
+- Shell used for the commands in this repo: PowerShell
+- External dependency: OpenAI API access for generation
 
-Estimate token usage and projected API cost for the default depth set `1,2,3`:
+## Input Files
+
+Default source file:
+
+```text
+../HC3-Dataset-Samples/hc3_unified_1000_seed42.csv
+```
+
+For the tracked 10k recursive export kept in this repo, use:
+
+```text
+../HC3-Dataset-Samples/hc3_unified_10000_seed42_clean.csv
+```
+
+Optional prompt prefix file:
+
+```text
+prompt_prefix.txt
+```
+
+## How to run
+
+Estimate token usage and API cost with the default settings:
 
 ```bash
 python paraphrase_pipeline.py estimate
 ```
 
-Generate depth `1`, `2`, and `3` dataset variants for a 100-row pilot:
-
-```bash
-python paraphrase_pipeline.py run --sample-rows 100 --generator-model gpt-5.4-mini --max-estimated-cost-usd 5
-```
-
-By default, depth `3` is sent back to OpenAI for a Likert quality check using:
+Estimate the tracked 10k-source run:
 
 ```text
-Statement: "This document was a high quality piece of text."
-Strongly Disagree
-Disagree
-Neutral / Neither Agree nor Disagree
-Agree
-Strongly Agree
+python paraphrase_pipeline.py estimate --source-file ..\HC3-Dataset-Samples\hc3_unified_10000_seed42_clean.csv --generator-model gpt-5.4-mini --depths 1,2,3
 ```
 
-Scores below `3` are rejected for the depth `3` export. The row is kept, but the exported text falls back to the previous available paraphrase depth, usually depth `2`. Use `--quality-min-score 4` to make the gate stricter, or `--quality-check-depth 0` to disable it.
+Run the full 10k source file:
 
-Generate a proportional subset with a different model:
-
-```bash
-python paraphrase_pipeline.py run --sample-fraction 0.25 --generator-model gpt-5.4-nano
+```text
+python paraphrase_pipeline.py run --source-file ..\HC3-Dataset-Samples\hc3_unified_10000_seed42_clean.csv --generator-model gpt-5.4-mini --depths 1,2,3
 ```
 
-Override the depth list if needed:
+Useful flags:
 
-```bash
-python paraphrase_pipeline.py run --depths 2,3
+- `--sample-rows N`
+- `--sample-fraction X`
+- `--depths 1,2,3`
+- `--quality-check-depth 3`
+- `--quality-min-score 3`
+- `--max-estimated-cost-usd VALUE`
+- `--num-shards N --shard-index K`
+
+## How results are generated
+
+1. `estimate` computes token and cost estimates for the chosen source file, model, and recursion depths.
+2. `run` reads the source HC3 CSV, builds the control split, and generates recursive paraphrases for each requested depth.
+3. The script writes the generated CSV datasets, checkpoints, API call logs, and manifest files under the output directory for that run.
+4. The canonical tracked final export in this repo is `datasets_final_hc3_unified_10000_gpt54mini_depths123/`.
+
+## Output Layout
+
+Per-run artifacts are written under:
+
+```text
+artifacts/experiments/<source>_<subset>_seed<seed>/
 ```
 
-## Outputs
-
-Each run writes into `artifacts/experiments/<source>_<subset>_seed<seed>/`:
+Typical contents:
 
 - `sampled_source_rows.csv`
 - `estimate.json`
-- `prompt_prefix.txt` controls the editable rephrasing instructions used for the run
 - `datasets/control/{train,val,test,full}.csv`
 - `datasets/<model>/depth_<n>/{train,val,test,full}.csv`
 - `checkpoints/<model>_depthmax<n>.jsonl`
 - `api_calls/<model>_depthmax<n>.jsonl`
 - `generation_manifest.json`
-
-Quality gate scores are stored in the checkpoint JSONL under `quality_checks_by_depth`, logged in `api_calls/<model>_depthmax<n>.jsonl` with `call_type: quality_check`, and summarized in each dataset `manifest.json`.
-
-Each dataset directory contains the same split CSV shape expected by the existing ZeroGPT Colab workflow. Use one of the generated dataset directories as the input data folder when you run the training and evaluation workflow in `ZeroGPT/colab_hc3_bundle`.
-
-## Model Selection and Pricing
-
-The CLI accepts arbitrary model IDs through `--generator-model`. Built-in cost estimation is included for the GPT-5.4 family using official OpenAI pricing checked on **April 13, 2026**:
-
-- `gpt-5.4`
-- `gpt-5.4-mini`
-- `gpt-5.4-nano`
-
-For another model, pass a pricing override:
-
-```bash
-python paraphrase_pipeline.py estimate --generator-model my-model --model-pricing my-model=0.75,4.50
-```
-
-The override format is `MODEL=INPUT_COST_PER_1M,OUTPUT_COST_PER_1M`.

@@ -1,7 +1,7 @@
 {
   "additional_details": {
     "additional_models_used": [
-      "/content/drive/MyDrive/colab_hc3_bundle/hf_models/gpt2"
+      "gpt2"
     ],
     "notes": "Exported from ZeroGPT Colab evaluation on test_dataset."
   },

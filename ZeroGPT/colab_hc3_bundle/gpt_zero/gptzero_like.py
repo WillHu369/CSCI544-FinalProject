@@ -4,7 +4,6 @@ import hashlib
 import json
 import math
 import os
-import time
 from dataclasses import asdict, dataclass
 from pathlib import Path
 from typing import Any
@@ -33,29 +32,14 @@ def _should_report_progress(batch_index: int, total_batches: int) -> bool:
     return batch_index == 1 or batch_index == total_batches or batch_index % 10 == 0
 
 
-def _format_duration(seconds: float) -> str:
-    total_seconds = max(int(round(seconds)), 0)
-    hours, remainder = divmod(total_seconds, 3600)
-    minutes, secs = divmod(remainder, 60)
-    return f"{hours:02d}:{minutes:02d}:{secs:02d}"
-
-
 def _print_progress(
     prefix: str,
     batch_index: int,
     total_batches: int,
     processed_rows: int,
     total_rows: int,
-    start_time: float,
 ) -> None:
-    elapsed = max(time.perf_counter() - start_time, 1e-9)
-    rate = processed_rows / elapsed
-    remaining_rows = max(total_rows - processed_rows, 0)
-    eta_seconds = remaining_rows / rate if rate > 0 else 0.0
-    print(
-        f"[{prefix}] batch {batch_index}/{total_batches} | processed {processed_rows}/{total_rows} samples "
-        f"| rate={rate:.2f} samples/s | elapsed={_format_duration(elapsed)} | eta={_format_duration(eta_seconds)}"
-    )
+    print(f"[{prefix}] batch {batch_index}/{total_batches} | processed {processed_rows}/{total_rows}")
 
 
 @dataclass
@@ -396,11 +380,11 @@ class GPTZeroLikeDetector:
             if cache_entry is not None:
                 cache_frame_path, cache_meta_path, _ = cache_entry
                 if cache_frame_path.exists():
-                    print(f"[{progress_label}] loading cached GPTZero-style features from {cache_frame_path}")
+                    print(f"[{progress_label}] loading cached features")
                     try:
                         return read_table(cache_frame_path)
                     except Exception as exc:
-                        print(f"[{progress_label}] cache read failed ({exc}); recomputing features")
+                        print(f"[{progress_label}] cache read failed; recomputing")
                         cache_frame_path.unlink(missing_ok=True)
                         cache_meta_path.unlink(missing_ok=True)
 
@@ -409,8 +393,7 @@ class GPTZeroLikeDetector:
         total_batches = loader.num_batches()
         processed_rows = 0
         feature_batches = []
-        start_time = time.perf_counter()
-        print(f"[{progress_label}] extracting GPTZero-style features for {total_rows} samples in {total_batches} batches")
+        print(f"[{progress_label}] extracting features for {total_rows} samples")
         for batch_index, batch in enumerate(loader.iter_frames(), start=1):
             texts = batch["text"].fillna("").astype(str).tolist()
             feature_frame = pd.DataFrame(
@@ -427,13 +410,9 @@ class GPTZeroLikeDetector:
             feature_batches.append(feature_frame)
             processed_rows += len(batch)
             if _should_report_progress(batch_index, total_batches):
-                _print_progress(progress_label, batch_index, total_batches, processed_rows, total_rows, start_time)
+                _print_progress(progress_label, batch_index, total_batches, processed_rows, total_rows)
 
-        elapsed = time.perf_counter() - start_time
-        print(
-            f"[{progress_label}] completed feature extraction for {processed_rows} samples "
-            f"in {_format_duration(elapsed)}"
-        )
+        print(f"[{progress_label}] completed feature extraction for {processed_rows} samples")
 
         if not feature_batches:
             columns = ["sample_id", *self.feature_columns, "label"]
@@ -454,7 +433,7 @@ class GPTZeroLikeDetector:
                 },
                 cache_meta_path,
             )
-            print(f"[{progress_label}] cached GPTZero-style features at {cache_frame_path}")
+            print(f"[{progress_label}] cached features")
 
         return feature_frame
 
