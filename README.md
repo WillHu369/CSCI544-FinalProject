@@ -5,6 +5,37 @@ This repo contains the dataset generation and detector evaluation workflows used
 - recursive paraphrase dataset generation
 - ZeroGPT-style baseline and GPTZero-like detector evaluation in Colab
 - T5 word-perturbation dataset creation
+- Binoculars evaluation notes and artifacts
+
+## Environment setup
+
+This project uses both a local Python environment and Google Colab.
+
+- `HC3-Recursive-Paraphrase` runs in a local Python environment. Install `HC3-Recursive-Paraphrase/requirements.txt` and add `OPENAI_API_KEY` to `HC3-Recursive-Paraphrase/.env`.
+- `ZeroGPT/colab_hc3_bundle` runs in Google Colab. Upload the folder to Google Drive and run `hc3_colab_workflow.ipynb`; the notebook handles its runtime installs.
+- `pertubation_dataset_creator.ipynb` runs in Google Colab. Open the notebook and run its install cell before the generation cells.
+- `Binoculars` reproduction notes are in [`Binoculars/README.md`](Binoculars/README.md).
+
+## Device / system used
+
+The code in this repo was run in two environments:
+
+- a local Windows/Python environment for the recursive paraphrase pipeline
+- Google Colab GPU runtimes for the ZeroGPT-style baselines, GPTZero-like detector, perturbation notebook, and Binoculars workflow
+
+## How to run
+
+- Recursive paraphrase: follow [`HC3-Recursive-Paraphrase/README.md`](HC3-Recursive-Paraphrase/README.md).
+- ZeroGPT Colab workflow: follow [`ZeroGPT/colab_hc3_bundle/README.md`](ZeroGPT/colab_hc3_bundle/README.md).
+- Perturbation dataset creator: use the inline instructions below in this README.
+- Binoculars: follow [`Binoculars/README.md`](Binoculars/README.md).
+
+## How results are generated
+
+- The recursive paraphrase pipeline reads an HC3 unified CSV and writes control plus recursive-depth paraphrase CSV exports and manifests.
+- The perturbation notebook reads the HC3 CSV, perturbs only the AI answers with T5 mask filling, and writes a perturbed CSV plus a JSON report.
+- The ZeroGPT Colab workflow trains or reuses the SVM-TF-IDF, XGBoost-TF-IDF, and GPTZero-like detectors, evaluates the kept test datasets, and writes metric outputs under `artifacts/runs/` and `metrics_share/`.
+- The Binoculars workflow scores the kept evaluation sets and produces metric artifacts for comparison with the other detectors.
 
 ## Recursive paraphrase
 
@@ -58,7 +89,7 @@ The default input filename is:
 hc3_unified_10000_seed42_clean.csv
 ```
 
-### How to run
+### Perturbation notebook steps
 
 1. Open `pertubation_dataset_creator.ipynb` in Colab.
 2. Run the install cell.

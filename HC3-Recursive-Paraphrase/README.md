@@ -2,7 +2,7 @@
 
 This folder generates recursive paraphrase variants of the HC3 unified dataset. It reuses the HC3 normalization and split logic from `ZeroGPT/colab_hc3_bundle`, but it does not train or score detectors itself.
 
-## Prerequisites
+## Environment setup
 
 - Python with the dependencies in `requirements.txt`
 - an OpenAI API key
@@ -21,6 +21,12 @@ OPENAI_API_KEY=your_api_key_here
 ```
 
 The script loads that file automatically.
+
+## Device / system used
+
+- Platform used for the tracked export: local Windows/Python environment
+- Shell used for the commands in this repo: PowerShell
+- External dependency: OpenAI API access for generation
 
 ## Input Files
 
@@ -42,7 +48,7 @@ Optional prompt prefix file:
 prompt_prefix.txt
 ```
 
-## Main Commands
+## How to run
 
 Estimate token usage and API cost with the default settings:
 
@@ -72,6 +78,13 @@ Useful flags:
 - `--max-estimated-cost-usd VALUE`
 - `--num-shards N --shard-index K`
 
+## How results are generated
+
+1. `estimate` computes token and cost estimates for the chosen source file, model, and recursion depths.
+2. `run` reads the source HC3 CSV, builds the control split, and generates recursive paraphrases for each requested depth.
+3. The script writes the generated CSV datasets, checkpoints, API call logs, and manifest files under the output directory for that run.
+4. The canonical tracked final export in this repo is `datasets_final_hc3_unified_10000_gpt54mini_depths123/`.
+
 ## Output Layout
 
 Per-run artifacts are written under:
@@ -89,4 +102,3 @@ Typical contents:
 - `checkpoints/<model>_depthmax<n>.jsonl`
 - `api_calls/<model>_depthmax<n>.jsonl`
 - `generation_manifest.json`
-
