@@ -3,6 +3,7 @@
 This repo contains the dataset generation and detector evaluation workflows used in the project:
 
 - recursive paraphrase dataset generation
+- stylistic cleanup (avoidance technique) dataset creation 
 - ZeroGPT-style baseline and GPTZero-like detector evaluation in Colab
 - T5 word-perturbation dataset creation
 - Binoculars evaluation notes and artifacts
@@ -13,6 +14,7 @@ This repo contains the dataset generation and detector evaluation workflows used
 This project uses both a local Python environment and Google Colab.
 
 - `HC3-Recursive-Paraphrase` runs in a local Python environment. Install `HC3-Recursive-Paraphrase/requirements.txt` and add `OPENAI_API_KEY` to `HC3-Recursive-Paraphrase/.env`.
+- `Stylistic-Cleanup` runs ina Google Colab. Follow the instructions in the folder README to install the required libraries.Upload the file and the HC3 dataset to Google Drive and run `RB_final_project_stylistic_cleanup.ipynb`. 
 - `ZeroGPT/colab_hc3_bundle` runs in Google Colab. Upload the folder to Google Drive and run `hc3_colab_workflow.ipynb`; the notebook handles its runtime installs.
 - `pertubation_dataset_creator.ipynb` runs in Google Colab. Open the notebook and run its install cell before the generation cells.
 - `Binoculars` reproduction notes are in [`Binoculars/README.md`](Binoculars/README.md).
@@ -28,6 +30,7 @@ The code in this repo was run in two environments:
 ## How to run
 
 - Recursive paraphrase: follow [`HC3-Recursive-Paraphrase/README.md`](HC3-Recursive-Paraphrase/README.md).
+- Stylistic cleanup follow [`Stylistic-Cleanup'/README.md`](Stylistic-Cleanup/README.md)
 - ZeroGPT Colab workflow: follow [`ZeroGPT/colab_hc3_bundle/README.md`](ZeroGPT/colab_hc3_bundle/README.md).
 - Perturbation dataset creator: use the inline instructions below in this README.
 - Binoculars: follow [`Binoculars/README.md`](Binoculars/README.md).
@@ -36,6 +39,7 @@ The code in this repo was run in two environments:
 ## How results are generated
 
 - The recursive paraphrase pipeline reads an HC3 unified CSV and writes control plus recursive-depth paraphrase CSV exports and manifests.
+- The stylistic cleanup reads an HC3 unified CSV and perturbs input data by removing em dashes, emojs, and converting all markdown formatting (lists, headers, bold text, bullet points) to standard/prose text. 
 - The perturbation notebook reads the HC3 CSV, perturbs only the AI answers with T5 mask filling, and writes a perturbed CSV plus a JSON report.
 - The ZeroGPT Colab workflow trains or reuses the SVM-TF-IDF, XGBoost-TF-IDF, and GPTZero-like detectors, evaluates the kept test datasets, and writes metric outputs under `artifacts/runs/` and `metrics_share/`.
 - The Binoculars workflow scores the kept evaluation sets and produces metric artifacts for comparison with the other detectors.
