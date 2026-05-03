@@ -1,50 +1,76 @@
-# HC3 Dataset Samples — Notes
+# HC3 Dataset Samples
 
-This folder is for the subset of HC3 examples used in our experiments (human vs model-generated passages). The goal is to keep the exact evaluation inputs stable so detector results are comparable across runs.
+This folder contains the HC3 subsets used across our experiments. The goal is to keep evaluation inputs stable so detector results are comparable across runs and avoidance techniques.
 
 ## Environment setup
 
-No special environment is required to *store* or *read* the samples in this folder. To generate a fresh sample from HC3, you need Python plus the Hugging Face `datasets` library.
+To regenerate samples from HC3 you need Python plus:
 
 ```bash
-pip install datasets tqdm
+pip install pandas huggingface_hub
 ```
+
+The script downloads HC3 via Hugging Face, so it requires internet access.
 
 ## Device / system used
 
-I generated the samples locally on my laptop (CPU-only) and waited for the download + sampling to finish.
+- Platform used for the tracked exports: local CPU-only environment
 
-If you want this to be fully reproducible, fill in:
-- OS:
-- CPU:
-- RAM:
-- Python version:
+## Input files
 
-## Instructions for running the code
+The sampling script pulls the full dataset from:
 
-### Generate 10,000 HC3 rows
-
-Run from the repo root:
-
-```bash
-python HC3-dataset-samples/generate_hc3_samples.py \
-  --total-samples 10000 \
-  --out HC3-dataset-samples/hc3_10000.jsonl
+```text
+Hello-SimpleAI/HC3 (all.jsonl)
 ```
 
-### Generate a CSV (recommended for uploads)
+## How to run
+
+All commands below assume you run from the repo root.
+
+### 1) Create a unified sample with N total rows
+
+Create exactly 10,000 HC3 rows:
 
 ```bash
-python HC3-dataset-samples/generate_hc3_samples.py \
-  --total-samples 10000 \
-  --format csv \
-  --out HC3-dataset-samples/hc3_10000.csv
+python HC3-Dataset-Samples/create_hc3_sample.py --total-samples 10000 --seed 42 --output-dir HC3-Dataset-Samples
 ```
 
-Notes:
-- This script downloads HC3 via Hugging Face, so it requires internet access.
-- By default it tries to balance `human` vs `ai` rows (one answer per row). Use `--no-balanced` to disable.
+To expand a previous unified set while preserving the original rows (e.g., keep the existing 1,000 rows inside a new 10,000-row sample):
 
-## How results are generated
+```bash
+python HC3-Dataset-Samples/create_hc3_sample.py \
+  --total-samples 10000 \
+  --seed 42 \
+  --preserve-unified-sample HC3-Dataset-Samples/hc3_unified_1000_seed42.csv \
+  --output-dir HC3-Dataset-Samples
+```
 
-The “result” of running the sampling script is the exported file (`.jsonl` or `.csv`). Each output row corresponds to a single (question, answer) pair and includes a `label` field (`human` or `ai`), plus metadata like the dataset config and example index. These exported rows are then used as the fixed evaluation inputs for the detectors (for example, Binoculars; see `binoculars/README.md`).
+### 2) Create a balanced per-domain sample
+
+Sample the same number of rows from each HC3 `source`:
+
+```bash
+python HC3-Dataset-Samples/create_hc3_sample.py --samples-per-domain 200 --seed 42 --output-dir HC3-Dataset-Samples
+```
+
+## Outputs
+
+The script always writes:
+
+1. one unified CSV, named like:
+   `hc3_unified_<N>_seed<seed>.csv`
+2. one CSV per HC3 source, named like:
+   `hc3_<source>_<count>_seed<seed>.csv`
+
+## File format
+
+Each output row is an HC3 "wide" row with these columns:
+
+- `hc3_row_id`
+- `source`
+- `question`
+- `human_answers` (JSON-serialized list)
+- `chatgpt_answers` (JSON-serialized list)
+
+Downstream evaluation scripts (e.g., Binoculars in `Binoculars/evaluate_samples.py`) expand the answer-list columns into per-answer `text` + `label` rows for scoring.
