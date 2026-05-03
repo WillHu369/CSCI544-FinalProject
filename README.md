@@ -6,6 +6,7 @@ This repo contains the dataset generation and detector evaluation workflows used
 - ZeroGPT-style baseline and GPTZero-like detector evaluation in Colab
 - T5 word-perturbation dataset creation
 - Binoculars evaluation notes and artifacts
+- DetectGPT detector evaluation
 
 ## Environment setup
 
@@ -15,6 +16,7 @@ This project uses both a local Python environment and Google Colab.
 - `ZeroGPT/colab_hc3_bundle` runs in Google Colab. Upload the folder to Google Drive and run `hc3_colab_workflow.ipynb`; the notebook handles its runtime installs.
 - `pertubation_dataset_creator.ipynb` runs in Google Colab. Open the notebook and run its install cell before the generation cells.
 - `Binoculars` reproduction notes are in [`Binoculars/README.md`](Binoculars/README.md).
+- `DetectGPT` runs in Google Colab. Upload the folder to Google Drive and run `DetectGPT.ipynb`; the notebook handles its runtime installs. The readme on the instructions is at [`DetectGPT-colab/README.md`](DetectGPT-colab/README.md).
 
 ## Device / system used
 
@@ -29,6 +31,7 @@ The code in this repo was run in two environments:
 - ZeroGPT Colab workflow: follow [`ZeroGPT/colab_hc3_bundle/README.md`](ZeroGPT/colab_hc3_bundle/README.md).
 - Perturbation dataset creator: use the inline instructions below in this README.
 - Binoculars: follow [`Binoculars/README.md`](Binoculars/README.md).
+- DetectGPT: follow [`DetectGPT-colab/README.md`](DetectGPT-colab/README.md)
 
 ## How results are generated
 
@@ -106,3 +109,15 @@ The notebook writes:
 - `hc3_unified_t5_perturbed_ai_clean_report.json`
 
 Only the AI answers are perturbed. Human answers are passed through and reserialized into the same HC3-compatible column shape.
+
+## DetectGPT Colab workflow
+
+The DetectGPT notebook lives in [`DetectGPT-colab/DetectGPT.ipynb`](DetectGPT-colab/DetectGPT.ipynb) and is designed to run in Google Colab with the project folder stored in Google Drive.
+
+- Upload the full `DetectGPT-colab` folder to Drive, including `DetectGPT.ipynb`, `run.py`, `custom_datasets.py`, `calculate_metrics.py`, `avoidance_run.py`, `requirements.txt`, and `data/`.
+- Open `DetectGPT.ipynb` in Colab, install the notebook dependencies, mount Drive, and set `PROJECT_PATH` to the uploaded folder.
+- Make sure the HC3 data is available in `data/hc3` before running the detector.
+- Run the smoke test cell first, then use the larger run cells and pass the generated `.json` file to `calculate_metrics.py`.
+- Results are written under `results/`, and the notebook uses a Drive-backed `hf_cache` for Hugging Face assets.
+
+See [`DetectGPT-colab/README.md`](DetectGPT-colab/README.md) for the full notebook-specific setup and command examples.

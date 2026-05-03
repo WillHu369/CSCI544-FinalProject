@@ -4,7 +4,7 @@ This folder is designed to run end-to-end in **Google Colab** using files stored
 
 The notebook mounts your Drive, runs `run.py`, and reads/writes data/results from the project folder in Drive. The main thing users need to change is the `PROJECT_PATH` variable in the notebook. 
 
-**Note** If you don't have the writing prompt dataset in your `data` folder, then in the smoke tests, you can just change `--dataset` flag from `writing` to `hc3_all`
+**IMPORTANT** You need the HC3 data set in your `data/hc3` folder.
 
 ## Requirements
 
@@ -28,6 +28,7 @@ Upload the full `DetectGPT-colab` folder, including:
 - `run.py`
 - `custom_datasets.py`
 - `calculate_metrics.py`
+- `avoidance_run.py`
 - `requirements.txt`
 - `data/` (dataset files)
 - `paper_scripts/` (optional helper scripts)
@@ -64,7 +65,7 @@ PROJECT_PATH = "/content/drive/MyDrive/DetectGPT-colab"
    - Import packages
    - Mount Google Drive
    - Set `PROJECT_PATH` to your Drive folder location
-4. Run one smoke test cell to verify everything works.
+4. Run the smoke test cell to verify everything works.
 
 The notebook already includes setup for:
 
@@ -85,12 +86,12 @@ If this path is wrong, Colab will not find `run.py`, datasets, or output folders
 
 ## Smoke Test Recommendation
 
-Use the provided smoke test cell in the notebook (small sample count) before running medium/full experiments.
+Use the provided smoke test cell in the notebook (small sample count) before running full experiments.
 
-A typical smoke test command (already present in the notebook) looks like:
+A typical smoke test command looks like:
 
 ```bash
-python run.py --output_name smoke_hc3 --dataset hc3_all --base_model_name gpt2 --mask_filling_model_name t5-small --n_perturbation_list 3 --n_samples 50 --pct_words_masked 0.3 --skip_baselines --cache_dir hf_cache --batch_size 10 --chunk_size 10
+python run.py --output_name smoke_hc3 --dataset hc3_all --base_model_name gpt2 --mask_filling_model_name t5-small --n_perturbation_list 3 --n_samples 50 --skip_baselines --cache_dir hf_cache
 ```
 
 ## Output and Metrics
@@ -102,7 +103,5 @@ python run.py --output_name smoke_hc3 --dataset hc3_all --base_model_name gpt2 -
 
 - `FileNotFoundError` for scripts/data:
   - Check `PROJECT_PATH` and confirm all files/folders were uploaded to Drive.
-- Out-of-memory errors:
-  - Use smaller `--batch_size`, `--chunk_size`, or fewer `--n_samples`.
 - Slow first run:
-  - First execution downloads models/datasets; later runs are faster due to cache.
+  - First execution downloads base and perturbation models. Later runs are faster due to cache.
