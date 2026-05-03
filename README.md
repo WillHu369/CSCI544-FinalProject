@@ -14,7 +14,7 @@ This repo contains the dataset generation and detector evaluation workflows used
 This project uses both a local Python environment and Google Colab.
 
 - `HC3-Recursive-Paraphrase` runs in a local Python environment. Install `HC3-Recursive-Paraphrase/requirements.txt` and add `OPENAI_API_KEY` to `HC3-Recursive-Paraphrase/.env`.
-- `Stylistic-Cleanup` runs ina Google Colab. Follow the instructions in the folder README to install the required libraries.Upload the file and the HC3 dataset to Google Drive and run `RB_final_project_stylistic_cleanup.ipynb`. 
+- `Stylistic-Cleanup` runs in a Google Colab. Follow the instructions in the folder README to install the required libraries.Upload the file and the HC3 dataset to Google Drive and run `RB_final_project_stylistic_cleanup.ipynb`. 
 - `ZeroGPT/colab_hc3_bundle` runs in Google Colab. Upload the folder to Google Drive and run `hc3_colab_workflow.ipynb`; the notebook handles its runtime installs.
 - `pertubation_dataset_creator.ipynb` runs in Google Colab. Open the notebook and run its install cell before the generation cells.
 - `Binoculars` reproduction notes are in [`Binoculars/README.md`](Binoculars/README.md).
