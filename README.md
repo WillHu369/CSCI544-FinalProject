@@ -104,7 +104,7 @@ hc3_unified_10000_seed42_clean.csv
 4. Adjust the config values in the notebook if needed:
    `MODEL_NAME`, `PERTURBATIONS_PER_ANSWER`, `GENERATION_BATCH_SIZE`, `MAX_ROWS`, `CHECKPOINT_EVERY`.
 5. Run the remaining cells in order.
-testestest 
+
 ### Outputs
 
 The notebook writes:
@@ -113,6 +113,21 @@ The notebook writes:
 - `hc3_unified_t5_perturbed_ai_clean_report.json`
 
 Only the AI answers are perturbed. Human answers are passed through and reserialized into the same HC3-compatible column shape.
+
+## Binoculars Colab workflow
+
+The Binoculars notebook lives in [`Binoculars/Binoculars_Colab.ipynb`](Binoculars/Binoculars_Colab.ipynb) and is designed to run in Google Colab with a GPU runtime.
+
+1. Open `Binoculars/Binoculars_Colab.ipynb` in Colab and select a GPU runtime.
+2. Upload `Binoculars/evaluate_samples.py`.
+3. Upload one or more HC3 CSVs from [`HC3-Dataset-Samples/`](HC3-Dataset-Samples/) (HC3 "wide" schema).
+4. Run the notebook cells in order to score samples, export `summary.json`, and export `roc_curve.csv`.
+
+Tracked metric artifacts (JSON summaries and ROC-point CSVs) are kept under:
+
+```text
+Metrics/Binoculars/
+```
 
 ## DetectGPT Colab workflow
 
