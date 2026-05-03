@@ -30,7 +30,7 @@ The code in this repo was run in two environments:
 ## How to run
 
 - Recursive paraphrase: follow [`HC3-Recursive-Paraphrase/README.md`](HC3-Recursive-Paraphrase/README.md).
-- Stylistic cleanup follow [`Stylistic-Cleanup'/README.md`](Stylistic-Cleanup/README.md)
+- Stylistic cleanup follow [`Stylistic-Cleanup/README.md`](Stylistic-Cleanup/README.md)
 - ZeroGPT Colab workflow: follow [`ZeroGPT/colab_hc3_bundle/README.md`](ZeroGPT/colab_hc3_bundle/README.md).
 - Perturbation dataset creator: use the inline instructions below in this README.
 - Binoculars: follow [`Binoculars/README.md`](Binoculars/README.md).
